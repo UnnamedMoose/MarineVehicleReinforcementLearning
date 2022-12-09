@@ -58,14 +58,14 @@ class AuvEnv(gym.Env):
         self.Nr = -0.07
 
         # Max actuation
-        self.maxForce = 100.  # N
-        self.maxMoment = 10.  # Nm
+        self.maxForce = 150.  # N
+        self.maxMoment = 20.  # Nm
 
         # Non-dimensional (x, y) force and yaw moment.
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
         # Observation space.
         # TODO change length here when adding new items to the state.
-        lenState = 3
+        lenState = 4
         self.observation_space = gym.spaces.Box(
             -1*np.ones(lenState, dtype=np.float32),
             np.ones(lenState, dtype=np.float32),
@@ -88,19 +88,19 @@ class AuvEnv(gym.Env):
         # time trace of all important quantities. Most retrieved from the vehicle model itself
         self.timeHistory = []
 
-    def dataToState(self, pos, heading, oldState):
+    def dataToState(self, pos, heading):
         # Non-dimensionalise the position error (unit vector towards the target).
         perr = self.positionTarget - pos
-        perr /= max(1e-6, np.linalg.norm(perr))
+        dTarget = np.linalg.norm(perr)
+        perr /= max(1e-6, dTarget)
 
         # Get heading error by comparing on both sides of zero.
-        hdiff = headingError(self.headingTarget, heading)
+        # Clip the heading error to <-1, 1>. This should be implicit in the headingError
+        # function but a limiter never hurts.
+        herr = min(1., max(-1., headingError(self.headingTarget, heading)/np.pi))
 
-        # Clip the heading error to <-1, 1>
-        herr = min(1., max(-1., hdiff/(180./180.*np.pi)))
-
-        # Actual state are values relative to the target.
-        newState = np.concatenate([perr, [herr]])
+        # Actual state are values relative to the target and distance to target.
+        newState = np.concatenate([perr, [herr, dTarget]])
 
         # TODO add more items here. Basic controller needs the first three elements
         #   to stay like this.
@@ -108,7 +108,7 @@ class AuvEnv(gym.Env):
         return newState
 
     def reset(self, keepTimeHistory=False):
-        self.position = np.random.rand(2) * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]] \
+        self.position = np.random.rand(2) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]] \
             + [self.xMinMax[0], self.yMinMax[0]]
         self.positionStart = self.position.copy()
         self.positionTarget = np.zeros(2)
@@ -120,7 +120,7 @@ class AuvEnv(gym.Env):
         self.time = 0
         self.iStep = 0
         self.steps_beyond_done = 0
-        self.state = self.dataToState(self.position, self.heading, np.zeros(3))
+        self.state = self.dataToState(self.position, self.heading)
         self.timeHistory = []
 
         return self.state
@@ -151,34 +151,65 @@ class AuvEnv(gym.Env):
         dydt = np.append(self.velocities, self.accelerations)
         y = np.concatenate([self.position, [self.heading], self.velocities])
         y = y + dydt*self.dt
-        self.position = y[:2]
-        self.heading = y[2] % (2.*np.pi)
-        self.velocities = y[3:]
+        position = y[:2]
+        heading = y[2] % (2.*np.pi)
+        velocities = y[3:]
 
         # Compute state.
-        self.state = self.dataToState(self.position, self.heading, self.state)
+        self.state = self.dataToState(position, heading)
 
         # Compute the reward.
         # TODO add more components here.
-        angleScale = 180. / 180. * np.pi
-        distScale = 0.3
-        perr = self.positionTarget - self.position
-        herr = headingError(self.headingTarget, self.heading)
+        perr = self.positionTarget - position
+        herr = headingError(self.headingTarget, heading)
 
-        reward = -0.5*np.sum([
-                min(1., np.abs(perr[0])/distScale),
-                min(1., np.abs(perr[1])/distScale),
-                min(1., np.abs(herr)/angleScale)
-            ])
+        # --- Reward 1: sum of all absolute errors scaled to reasonable value. ---
+        # angleScale = 180. / 180. * np.pi
+        # distScale = 0.3
+        # rewardTerms = -0.5*np.array([
+        #     min(1., np.abs(perr[0])/distScale),
+        #     min(1., np.abs(perr[1])/distScale),
+        #     min(1., np.abs(herr)/angleScale)
+        # ])
+
+        # --- Reward 2: reduce error in both position and heading errors. ---
+        # perr_o = self.positionTarget - self.position
+        # herr_o = headingError(self.headingTarget, self.heading)
+        # rewardTerms = np.array([
+        #     0.1*max(-1., min(1., np.abs(perr_o[0]) / max(1e-6, np.abs(perr[0])) - 1.)),
+        #     0.1*max(-1., min(1., np.abs(perr_o[1]) / max(1e-6, np.abs(perr[1])) - 1.)),
+        #     0.5*max(-1., min(1., np.abs(herr_o) / max(1e-6, np.abs(herr)) - 1.)),
+        #     -1.*sum(action**2.),
+        # ])
+
+        # --- Reward 3: reduce error in both position and heading errors. ---
+        # Reward components equal to zero at value=scaleFactor
+        # angleScale = 90. / 180. * np.pi
+        distScale = 0.3
+        rewardTerms = np.array([
+            0.1*np.clip(-np.log(max(1e-12, np.abs(perr[0])/distScale)), -2., 2.)/2.,
+            0.1*np.clip(-np.log(max(1e-12, np.abs(perr[1])/distScale)), -2., 2.)/2.,
+            # 0.1*np.clip(-np.log(max(1e-12, (np.abs(herr)/angleScale)**0.5)), -2., 2.)/2.,
+            -(np.abs(herr)/np.pi)**0.5,
+            -0.1*sum(action**2.),
+        ])
+
+        # Get total reward.
+        reward = np.sum(rewardTerms)
+
+        # Update the position and heading at the new time value.
+        self.position = position
+        self.heading = heading
+        self.velocities = velocities
 
         # Check if domain exceeded.
         done = False
         if (self.position[0] < self.xMinMax[0]) or (self.position[0] > self.xMinMax[1]):
             done = True
-            reward += -1000
+            reward += -1000.
         if (self.position[1] < self.yMinMax[0]) or (self.position[1] > self.yMinMax[1]):
             done = True
-            reward += -1000
+            reward += -1000.
         if self.iStep >= self._max_episode_steps:
             done = True
 
@@ -186,11 +217,12 @@ class AuvEnv(gym.Env):
         self.timeHistory.append(dict(zip(
             ["step", "time", "reward", "x", "y", "psi", "x_d", "y_d", "psi_d"] \
                 +["Fx", "Fy", "N", "Fx_set", "Fy_set", "N_set"] \
+                +["r{:d}".format(i) for i in range(len(rewardTerms))] \
                 +["a{:d}".format(i) for i in range(len(action))] \
                 +["s{:d}".format(i) for i in range(len(self.state))],
             np.concatenate([[self.iStep, self.time, reward], self.position, [self.heading],
                             self.positionTarget, [self.headingTarget], [X, Y, N, Fset[0], Fset[1], Nset],
-                            action, self.state])
+                            rewardTerms, action, self.state])
         )))
         if done:
             self.timeHistory = pandas.DataFrame(self.timeHistory)
@@ -415,7 +447,7 @@ def plotDetail(envs_to_plot, labels=None, title=""):
                     envs_to_plot[iEnv].timeHistory[f+"_d"].values*mults[i],
                     "--", lw=1, c=caseColours[iEnv])
         if nEnvs > 1:
-            ax.legend(loc="best", ncol=1, prop={"size": 18})
+            ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
 
     fig, ax = plt.subplots()
     ax.set_xlabel("Time step")
@@ -425,10 +457,10 @@ def plotDetail(envs_to_plot, labels=None, title=""):
                 c=caseColours[iEnv], label=labels[iEnv])
 
     for f in envs_to_plot[0].timeHistory.keys():
-        if re.match("a[0-9]+", f) or re.match("s[0-9]+", f):
+        if re.match("a[0-9]+", f) or re.match("s[0-9]+", f) or re.match("r[0-9]+", f):
             fig, ax = plt.subplots()
             ax.set_xlabel("Time step")
-            ax.set_ylabel(f.replace("a", "Action ").replace("s", "State "))
+            ax.set_ylabel(f.replace("a", "Action ").replace("s", "State ").replace("r", "Reward "))
             for iEnv in range(nEnvs):
                 ax.plot(envs_to_plot[iEnv].timeHistory[f], "-", lw=2,
                         c=caseColours[iEnv], label=labels[iEnv])
@@ -466,10 +498,10 @@ if __name__ == "__main__":
     nProc = 16
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 250_000
+    nTrainingSteps = 1_000_000
 
     model_kwargs = {
-        'learning_rate': 1e-3,
+        'learning_rate': 5e-4,
         'gamma':  0.99,
         'verbose': 1,
         'batch_size': 256,
@@ -478,7 +510,11 @@ if __name__ == "__main__":
     }
     policy_kwargs = {
         "activation_fn": torch.nn.GELU,
-        "net_arch": dict(pi=[64], qf=[64])
+        "net_arch": dict(
+            # Actor - determines action for a specific state
+            pi=[128],
+            # Critic - estimates value of each state-action combination
+            qf=[128, 128])
     }
 
     # Set up constants etc.
@@ -499,7 +535,8 @@ if __name__ == "__main__":
     print("\nTraining started at", str(starttime))
     model.learn(total_timesteps=nTrainingSteps, log_interval=200)
     endtime = datetime.datetime.now()
-    print("Training took {:.0f} seconds".format((endtime-starttime).total_seconds()))
+    trainingTime = (endtime-starttime).total_seconds()
+    print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
 
     # Plot training results.
     fig, ax = plt.subplots()
@@ -510,7 +547,7 @@ if __name__ == "__main__":
             [logDir], num_timesteps=1e15, x_axis="episodes", task_name="", figsize=(10, 8))
     except IndexError:
         pass
-    ax.set_ylim((-1500, 0))
+    ax.set_ylim((max(ax.get_ylim()[0], -1500), ax.get_ylim()[1]))
     plt.tight_layout()
 
     # Trained agent.
