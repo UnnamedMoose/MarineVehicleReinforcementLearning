@@ -330,18 +330,18 @@ class AuvEnv(gym.Env):
         perr /= max(1e-6, dTarget)
 
         # Get heading error by comparing on both sides of zero.
-        # Clip the heading error to <-1, 1>. This should be implicit in the headingError
-        # function but a limiter never hurts.
-        herr = min(1., max(-1., headingError(self.headingTarget, heading)/np.pi))
+        herr = headingError(self.headingTarget, heading)
         # dherr = (np.abs(headingError(self.headingTarget, self.heading))
         #          - np.abs(headingError(self.headingTarget, heading))) / np.pi
 
         newState = np.array([
             perr[0],
             perr[1],
-            herr,
+            min(1., max(-1., herr/np.pi)),
+            min(1., max(-1., herr/(45./180.*np.pi))),
             # dTarget,
-            np.dot(velocities[:2], perr),
+            # max(-1, min(1., np.dot(velocities[:2], perr))),
+            # max(-1, min(1., velocities[2]/np.pi*np.sign(herr))),
             # max(-1, min(1., velocities[2]/np.pi)),
             # self.headingTarget/np.pi-1.,
             # self.heading/np.pi-1.,
@@ -459,21 +459,23 @@ class AuvEnv(gym.Env):
             # 0.1*np.clip(-np.log(max(1e-12, (np.abs(herr)/angleScale)**0.5)), -2., 2.)/2.,
             # min(1., (np.linalg.norm(perr_o) - np.linalg.norm(perr))/0.1),
             # min(1., (np.abs(herr_o) - np.linalg.norm(herr))/0.1),
+            # -(np.abs(herr)/np.pi)**0.5,
+            # This does quite well for position.
+            # 0.5*np.tanh((1.-np.linalg.norm(perr)/0.05)*np.pi),
+            # np.tanh((1.-np.abs(herr)/(15./180.*np.pi))*np.pi),
+            # Try to add a smooth gradient and peak reward for psi
+            # np.tanh(np.pi-np.abs(herr))*2.-1.,
 
             # These two are okay
-            -max(-1., np.linalg.norm(perr)**0.5),
-            # -(np.abs(herr)/np.pi)**0.5,
+            # -max(-1., np.linalg.norm(perr)**0.5),
+            # -(np.abs(herr))**0.5,
 
             # This seems to obscure achieving the objective
             # -0.2*sum(action**2.),
 
-            # This does quite well for position.
-            # 0.5*np.tanh((1.-np.linalg.norm(perr)/0.05)*np.pi),
-            # np.tanh((1.-np.abs(herr)/(15./180.*np.pi))*np.pi),
+            -np.sum(np.clip(np.abs([perr[0], perr[1], herr])/[0.3, 0.3, 0.5*np.pi], 0., 1.)**2.),
 
-            # Try to add a smooth gradient and peak reward for psi
-            -(np.abs(herr))**0.5,
-            # np.tanh(np.pi-np.abs(herr))*2.-1.,
+            0.333*np.sum(np.abs([perr[0], perr[1], herr]) < [0.01, 0.01, 25./180.*np.pi]),
 
             bonus,
         ])
@@ -537,31 +539,35 @@ if __name__ == "__main__":
 
     modelName = "SAC_try0"
 
+    # No. parallel processes.
     nProc = 16
+    # Do everything N times to rule out random successes and failures.
     nModels = 3
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 200_000
+    nTrainingSteps = 1_000_000
 
     model_kwargs = {
-        'learning_rate': 5e-4,
+        'learning_rate': 4e-4,
         'gamma':  0.99,
         'verbose': 1,
-        'batch_size': 256*8,
         'buffer_size': int(1e6),
-        'learning_starts': 100,
-        'train_freq': (4, "step"),
+        "use_sde_at_warmup": True,
+        'batch_size': 32*32*4,
+        'learning_starts': 32*32*2,
+        'train_freq': (8, "step"),
         # "action_noise": VectorizedActionNoise(NormalActionNoise(
         #     np.zeros(3), 0.01*np.ones(3)), nProc)
     }
     policy_kwargs = {
         "use_sde": True,
+        # ReLU GELU Sigmoid SiLU SELU
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[8, 8],#[32],
+            pi=[16, 16],#[32],
             # Critic - estimates value of each state-action combination
-            qf=[16, 16],#[32, 32]
+            qf=[32, 32],#[64],
         )
     }
     # TODO compare weights somehow to see if some common features appear?
