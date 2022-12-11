@@ -11,6 +11,7 @@ import pandas
 import datetime
 import os
 import gym
+from gym.utils import seeding
 import torch
 import re
 import stable_baselines3
@@ -276,9 +277,10 @@ def headingError(psi_d, psi):
 
 
 class AuvEnv(gym.Env):
-    def __init__(self, dt=0.02):
+    def __init__(self, seed=None, dt=0.02):
         # Call base class constructor.
         super(AuvEnv, self).__init__()
+        self.seed = seed
 
         self._max_episode_steps = 200
 
@@ -353,6 +355,9 @@ class AuvEnv(gym.Env):
         return newState
 
     def reset(self, keepTimeHistory=False):
+        if self.seed is not None:
+            self._np_random, self.seed = seeding.np_random(self.seed)
+
         self.position = np.random.rand(2) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]] \
             + [self.xMinMax[0], self.yMinMax[0]]
         self.positionStart = self.position.copy()
@@ -471,7 +476,7 @@ class AuvEnv(gym.Env):
             # -(np.abs(herr))**0.5,
 
             # This seems to obscure achieving the objective
-            # -0.2*sum(action**2.),
+            # -0.2*sum((action*[1., 1., 0.1])**2.),
 
             -np.sum(np.clip(np.abs([perr[0], perr[1], herr])/[0.3, 0.3, 0.5*np.pi], 0., 1.)**2.),
 
@@ -528,8 +533,9 @@ def make_env(rank, seed=0, envKwargs={}):
     :param rank: (int) index of the subprocess
     """
     def _init():
-        env = AuvEnv(**envKwargs)
-        env.seed(seed + rank)
+        env = AuvEnv(seed=seed+rank, **envKwargs)
+        # env.seed(seed + rank)
+        # env.reset(seed=seed+rank)
         return env
     return _init
     pass
@@ -538,6 +544,9 @@ def make_env(rank, seed=0, envKwargs={}):
 if __name__ == "__main__":
 
     modelName = "SAC_try0"
+
+    # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
+    #   and see if something could be used here, too.
 
     # No. parallel processes.
     nProc = 16
@@ -548,8 +557,8 @@ if __name__ == "__main__":
     nTrainingSteps = 1_000_000
 
     model_kwargs = {
-        'learning_rate': 3e-4,
-        'gamma':  0.99,
+        'learning_rate': 5e-4,
+        'gamma': 0.97,
         'verbose': 1,
         'buffer_size': int(1e6),
         "use_sde_at_warmup": True,
@@ -598,6 +607,9 @@ if __name__ == "__main__":
         endtime = datetime.datetime.now()
         trainingTime = (endtime-starttime).total_seconds()
         print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
+
+        # Save.
+        model.save(saveFile)
 
         # Retain convergence info and model.
         convergenceData.append(pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1))
