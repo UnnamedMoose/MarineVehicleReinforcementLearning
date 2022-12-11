@@ -338,7 +338,7 @@ class AuvEnv(gym.Env):
             perr[0],
             perr[1],
             min(1., max(-1., herr/np.pi)),
-            min(1., max(-1., herr/(45./180.*np.pi))),
+            min(1., max(-1., herr/(30./180.*np.pi))),
             # dTarget,
             # max(-1, min(1., np.dot(velocities[:2], perr))),
             # max(-1, min(1., velocities[2]/np.pi*np.sign(herr))),
@@ -475,7 +475,7 @@ class AuvEnv(gym.Env):
 
             -np.sum(np.clip(np.abs([perr[0], perr[1], herr])/[0.3, 0.3, 0.5*np.pi], 0., 1.)**2.),
 
-            0.333*np.sum(np.abs([perr[0], perr[1], herr]) < [0.01, 0.01, 25./180.*np.pi]),
+            0.333*np.sum(np.abs([perr[0], perr[1], herr]) < [0.02, 0.02, 25./180.*np.pi]),
 
             bonus,
         ])
@@ -548,7 +548,7 @@ if __name__ == "__main__":
     nTrainingSteps = 1_000_000
 
     model_kwargs = {
-        'learning_rate': 4e-4,
+        'learning_rate': 3e-4,
         'gamma':  0.99,
         'verbose': 1,
         'buffer_size': int(1e6),
@@ -565,14 +565,14 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[16, 16],#[32],
+            pi=[16, 16],#[16, 16],#[32],
             # Critic - estimates value of each state-action combination
-            qf=[32, 32],#[64],
+            qf=[32, 32],#[32, 32],#[64],
         )
     }
     # TODO compare weights somehow to see if some common features appear?
-    # model.actor.xpu[0].weight.shape
-    # model.critic.qf0[2].weight
+    # model.actor.latent_pi[0].weight.shape
+    # model.critic.qf0[0].weight.shape
 
     # Train several times to make sure the agent doesn't just get lucky.
     convergenceData = []
