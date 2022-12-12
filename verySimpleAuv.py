@@ -75,9 +75,9 @@ def evaluate_agent(model, env, num_episodes=1, num_steps=None,
     print("  Num episodes:", num_episodes)
 
     if render:
-        return frames, mean_episode_reward
+        return frames, mean_episode_reward, all_episode_rewards
     else:
-        return mean_episode_reward
+        return mean_episode_reward, all_episode_rewards
 
 
 def plot_horizontal(ax, x, y, psi, scale=1, markerSize=1, arrowSize=1, vehicleColour="y"):
@@ -262,10 +262,18 @@ class PDController(object):
 
     def predict(self, obs):
         states = np.zeros(len(self.P))
+
+        # Drive the proportional term to zero when distance to the traget becomes small.
+        x = obs[:3]
+        x[:2] *= min(1., obs[3]/0.1)
+
         if self.oldObs is None:
-            self.oldObs = obs
-        actions = np.clip(obs[:3]*self.P + (obs[:3] - self.oldObs[:3])/self.dt*self.D, -1., 1.)
-        self.oldObs = obs
+            self.oldObs = x
+
+        actions = np.clip(x*self.P + (x - self.oldObs)/self.dt*self.D, -1., 1.)
+
+        self.oldObs = x
+
         return actions, states
 
 
@@ -318,7 +326,7 @@ class AuvEnv(gym.Env):
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
         # Observation space.
         # TODO change length here when adding new items to the state.
-        lenState = 4
+        lenState = 5
         self.observation_space = gym.spaces.Box(
             -1*np.ones(lenState, dtype=np.float32),
             np.ones(lenState, dtype=np.float32),
@@ -330,27 +338,30 @@ class AuvEnv(gym.Env):
         # NOTE for arbitrary motion this would need to be scaled and clipped to <-1, 1/0>
         dTarget = np.linalg.norm(perr)
         perr /= max(1e-6, dTarget)
+        # perr = perr / max(0.1, max(1e-6, dTarget))
 
         # Get heading error by comparing on both sides of zero.
         herr = headingError(self.headingTarget, heading)
         # dherr = (np.abs(headingError(self.headingTarget, self.heading))
         #          - np.abs(headingError(self.headingTarget, heading))) / np.pi
 
+        # TODO add more items here. Basic controller needs the first four elements
+        #   to stay as they are now.
+
         newState = np.array([
             perr[0],
             perr[1],
             min(1., max(-1., herr/np.pi)),
+            dTarget,
+            # np.cos(herr),
+            # np.sin(herr),
             min(1., max(-1., herr/(30./180.*np.pi))),
-            # dTarget,
             # max(-1, min(1., np.dot(velocities[:2], perr))),
             # max(-1, min(1., velocities[2]/np.pi*np.sign(herr))),
             # max(-1, min(1., velocities[2]/np.pi)),
             # self.headingTarget/np.pi-1.,
             # self.heading/np.pi-1.,
             ])
-
-        # TODO add more items here. Basic controller needs the first three elements
-        #   to stay as they are now.
 
         return newState
 
@@ -543,7 +554,7 @@ def make_env(rank, seed=0, envKwargs={}):
 
 if __name__ == "__main__":
 
-    modelName = "SAC_try0"
+    modelName = "SAC_try1"
 
     # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
     #   and see if something could be used here, too.
@@ -551,22 +562,22 @@ if __name__ == "__main__":
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
-    nModels = 3
+    nModels = 1
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 1_000_000
+    nTrainingSteps = 3_000_000
 
     model_kwargs = {
         'learning_rate': 5e-4,
-        'gamma': 0.97,
+        'gamma': 0.95,
         'verbose': 1,
         'buffer_size': int(1e6),
         "use_sde_at_warmup": True,
         'batch_size': 32*32*4,
         'learning_starts': 32*32*2,
-        'train_freq': (8, "step"),
-        # "action_noise": VectorizedActionNoise(NormalActionNoise(
-        #     np.zeros(3), 0.01*np.ones(3)), nProc)
+        'train_freq': (4, "step"),
+        "action_noise": VectorizedActionNoise(NormalActionNoise(
+            np.zeros(3), 0.01*np.ones(3)), nProc)
     }
     policy_kwargs = {
         "use_sde": True,
@@ -574,9 +585,9 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[16, 16],#[16, 16],#[32],
+            pi=[16, 16],
             # Critic - estimates value of each state-action combination
-            qf=[32, 32],#[32, 32],#[64],
+            qf=[32, 32],
         )
     }
     # TODO compare weights somehow to see if some common features appear?
@@ -615,7 +626,7 @@ if __name__ == "__main__":
         convergenceData.append(pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1))
         models.append(model)
 
-        print("Final reward {:.2f}".format(convergenceData[-1].rolling(50).mean()["r"].values[-1]))
+        print("Final reward {:.2f}".format(convergenceData[-1].rolling(200).mean()["r"].values[-1]))
 
     # Plot convergence of each model.
     fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 7))
@@ -625,17 +636,18 @@ if __name__ == "__main__":
     iBest = 0
     rewardBest = -1e6
     for iModel, convergence in enumerate(convergenceData):
-        rol = convergence.rolling(50).mean()
+        rol = convergence.rolling(200).mean()
         if rol["r"].values[-1] > rewardBest:
             iBest = iModel
             rewardBest = rol["r"].values[-1]
         for i, f in enumerate(["r", "l"]):
             ax[i].set_xlabel("Episode")
             ax[i].set_ylabel(f.replace("r", "Reward").replace("l", "Episode length"))
-            ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.25, c=colours[iModel])
+            ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.25, c=colours[iModel], zorder=-100)
             ln, = ax[i].plot(convergence.index, rol[f], "-", c=colours[iModel], lw=2)
             if i == 0:
                 lns.append(ln)
+    ax[0].set_ylim((max(ax[0].get_ylim()[0], -1500), ax[0].get_ylim()[1]))
     fig.legend(lns, ["M{:d}".format(iModel) for iModel in range(nModels)],
                loc="upper center", ncol=10)
 
@@ -644,14 +656,14 @@ if __name__ == "__main__":
 
     # Trained agent.
     print("\nAfter training")
-    mean_reward = evaluate_agent(model, env_eval)
+    mean_reward,_ = evaluate_agent(model, env_eval)
     plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
     env_eval_pd = AuvEnv()
     pdController = PDController(env_eval_pd.dt)
-    mean_reward = evaluate_agent(pdController, env_eval_pd)
+    mean_reward,_ = evaluate_agent(pdController, env_eval_pd)
     fig, ax = plotEpisode(env_eval_pd, "Simple control")
 
     # Compare detail

@@ -31,23 +31,31 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
-    saveFile = "./modelData/SAC_try0_2"
+    saveFile = "./modelData/SAC_try1_0"
 
     env_eval = auv.AuvEnv()
-    env_eval.reset()
-    model = stable_baselines3.SAC("MlpPolicy", env_eval)
-    model.load(saveFile)
+    model = stable_baselines3.SAC.load(saveFile)
+
+    # Evaluate for a large number of episodes to test robustness.
+    mean_reward, allRewards = auv.evaluate_agent(model, env_eval, num_episodes=100)
+    fig, ax = plt.subplots()
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Reward")
+    ax.bar(range(len(allRewards)), allRewards, color="r")
+    xlim = ax.get_xlim()
+    ax.plot(xlim, [mean_reward]*2, "r--", lw=4, alpha=0.5)
+    ax.set_xlim(xlim)
 
     # Trained agent.
     print("\nAfter training")
-    mean_reward = auv.evaluate_agent(model, env_eval)
+    mean_reward,_ = auv.evaluate_agent(model, env_eval)
     auv.plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
     env_eval_pd = auv.AuvEnv()
     pdController = auv.PDController(env_eval_pd.dt)
-    mean_reward = auv.evaluate_agent(pdController, env_eval_pd)
+    mean_reward,_ = auv.evaluate_agent(pdController, env_eval_pd)
     fig, ax = auv.plotEpisode(env_eval_pd, "Simple control")
 
     # Compare detail
