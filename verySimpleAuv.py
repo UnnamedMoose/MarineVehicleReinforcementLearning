@@ -577,7 +577,7 @@ if __name__ == "__main__":
         'learning_starts': 32*32*2,
         'train_freq': (4, "step"),
         "action_noise": VectorizedActionNoise(NormalActionNoise(
-            np.zeros(3), 0.01*np.ones(3)), nProc)
+            np.zeros(3), 0.05*np.ones(3)), nProc)
     }
     policy_kwargs = {
         "use_sde": True,
@@ -585,9 +585,9 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[16, 16],
+            pi=[32, 32],
             # Critic - estimates value of each state-action combination
-            qf=[32, 32],
+            qf=[64, 64],
         )
     }
     # TODO compare weights somehow to see if some common features appear?
