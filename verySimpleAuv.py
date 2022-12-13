@@ -14,10 +14,10 @@ import gym
 from gym.utils import seeding
 import torch
 import re
+import yaml
 import stable_baselines3
 from stable_baselines3.common.vec_env import VecMonitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common import results_plotter
 from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
 
 font = {"family": "serif",
@@ -554,7 +554,7 @@ def make_env(rank, seed=0, envKwargs={}):
 
 if __name__ == "__main__":
 
-    modelName = "SAC_try1"
+    modelName = "SAC_try3"
 
     # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
     #   and see if something could be used here, too.
@@ -562,7 +562,7 @@ if __name__ == "__main__":
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
-    nModels = 1
+    nModels = 3
 
     # TODO adjust the hyperparameters here.
     nTrainingSteps = 3_000_000
@@ -575,9 +575,9 @@ if __name__ == "__main__":
         "use_sde_at_warmup": True,
         'batch_size': 32*32*4,
         'learning_starts': 32*32*2,
-        'train_freq': (4, "step"),
+        'train_freq': [4, "step"],
         "action_noise": VectorizedActionNoise(NormalActionNoise(
-            np.zeros(3), 0.05*np.ones(3)), nProc)
+            np.zeros(3), 0.1*np.ones(3)), nProc)
     }
     policy_kwargs = {
         "use_sde": True,
@@ -585,9 +585,9 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[32, 32],
+            pi=[64, 64],
             # Critic - estimates value of each state-action combination
-            qf=[64, 64],
+            qf=[128, 128],
         )
     }
     # TODO compare weights somehow to see if some common features appear?
@@ -628,6 +628,23 @@ if __name__ == "__main__":
 
         print("Final reward {:.2f}".format(convergenceData[-1].rolling(200).mean()["r"].values[-1]))
 
+    # Save metadata in human-readable format.
+    with open("./modelData/{}_hyperparameters.yaml".format(modelName), "w") as outf:
+        data = {
+            "modelName": modelName,
+            "model_kwargs": model_kwargs.copy(),
+            "policy_kwargs": policy_kwargs.copy(),
+            "nTrainingSteps": nTrainingSteps,
+        }
+        # Change noise to human-readable format.
+        data["model_kwargs"]["action_noise"] = {
+            "mu": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._mu],
+            "sigma": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._sigma],
+            }
+        data["policy_kwargs"]["activation_fn"] = str(policy_kwargs["activation_fn"])
+        # Write.
+        yaml.dump(data, outf, default_flow_style=False)
+
     # Plot convergence of each model.
     fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 7))
     plt.subplots_adjust(top=0.91, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
@@ -650,6 +667,7 @@ if __name__ == "__main__":
     ax[0].set_ylim((max(ax[0].get_ylim()[0], -1500), ax[0].get_ylim()[1]))
     fig.legend(lns, ["M{:d}".format(iModel) for iModel in range(nModels)],
                loc="upper center", ncol=10)
+    plt.savefig("./modelData/{}_convergence.png".format(modelName), dpi=200, bbox_inches="tight")
 
     # Pick the best model.
     model = models[iBest]
