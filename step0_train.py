@@ -50,9 +50,9 @@ if __name__ == "__main__":
         'verbose': 1,
         'buffer_size': int(1e6),
         "use_sde_at_warmup": True,
-        'batch_size': 4096,
+        'batch_size': 2048,
         'learning_starts': 1024,
-        'train_freq': (1, "step"),
+        'train_freq': (4, "step"),
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.1*np.ones(3)), nProc)
     }

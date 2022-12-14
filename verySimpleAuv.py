@@ -292,7 +292,7 @@ class AuvEnv(gym.Env):
         # Basic forceand moment coefficients
         self.Xuu = -18.18 * 2.21 # kg/m
         self.Yvv = -21.66 * 4.87
-        self.Nrr =  -1.55 # kg m^2 / rad^2
+        self.Nrr = -1.55 # kg m^2 / rad^2
         self.Xu = -4.03 * 2.21
         self.Yv = -6.22 * 4.87
         self.Nr = -0.07
@@ -328,6 +328,7 @@ class AuvEnv(gym.Env):
             perr[1],
             min(1., max(-1., herr/np.pi)),
             dTarget,
+            # min(1., dTarget/0.1)  # TODO try this
             min(1., max(-1., herr/(30./180.*np.pi))),
             ])
 

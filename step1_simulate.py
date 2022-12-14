@@ -22,7 +22,7 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
-    modelName = "SAC_try2"
+    modelName = "SAC_try3"
 
     # Create the environment and load the best model to-date.
     env_eval = auv.AuvEnv()
@@ -33,7 +33,7 @@ if __name__ == "__main__":
         hyperparameters = yaml.safe_load(outf)
 
     # Load the convergence history of the model for demonstration purposes.
-    convergence = pandas.read_csv("./bestModel/monitor.csv", skiprows=1)
+    convergence = pandas.read_csv("./bestModel/{}_monitor.csv".format(modelName), skiprows=1)
 
     # Plot model convergence history.
     fig, ax = plt.subplots()
