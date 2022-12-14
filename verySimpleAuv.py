@@ -8,25 +8,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
-import datetime
-import os
 import gym
 from gym.utils import seeding
-import torch
 import re
-import yaml
-import stable_baselines3
-from stable_baselines3.common.vec_env import VecMonitor
-from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
-
-font = {"family": "serif",
-        "weight": "normal",
-        "size": 16}
-
-matplotlib.rc("font", **font)
-matplotlib.rcParams["figure.figsize"] = (9, 6)
-
 
 # Configure the coordinate system. Either use directions like they would appear
 # on a map (consistent with manoeuvring theory) or like they appear in traditional
@@ -249,11 +233,6 @@ class PDController(object):
     """ Simple controller that emulates the action of a model used in stable baselines.
     The returned forces are capped at +/- 1 to mimic actions of an RL agent.
     Observations are assumed to start with direction to target and scaled heading error. """
-    # NOTE: this is prone to chatter due to the way the states are defined, i.e.
-    #   when obs will flick constantly between -1/+1 the controller will respond
-    #   too abruptly. For the heading this may also (rarely) lead to it getting stuck
-    #   at the target angle + pi sometimes. Not important since it's only here
-    #   to test the environment and not show optimal classical control.
     def __init__(self, dt, P=[1., 1., 1.], D=[0.05, 0.05, 0.01]):
         self.P = np.array(P)
         self.D = np.array(D)
@@ -338,29 +317,18 @@ class AuvEnv(gym.Env):
         # NOTE for arbitrary motion this would need to be scaled and clipped to <-1, 1/0>
         dTarget = np.linalg.norm(perr)
         perr /= max(1e-6, dTarget)
-        # perr = perr / max(0.1, max(1e-6, dTarget))
 
         # Get heading error by comparing on both sides of zero.
         herr = headingError(self.headingTarget, heading)
-        # dherr = (np.abs(headingError(self.headingTarget, self.heading))
-        #          - np.abs(headingError(self.headingTarget, heading))) / np.pi
 
         # TODO add more items here. Basic controller needs the first four elements
         #   to stay as they are now.
-
         newState = np.array([
             perr[0],
             perr[1],
             min(1., max(-1., herr/np.pi)),
             dTarget,
-            # np.cos(herr),
-            # np.sin(herr),
             min(1., max(-1., herr/(30./180.*np.pi))),
-            # max(-1, min(1., np.dot(velocities[:2], perr))),
-            # max(-1, min(1., velocities[2]/np.pi*np.sign(herr))),
-            # max(-1, min(1., velocities[2]/np.pi)),
-            # self.headingTarget/np.pi-1.,
-            # self.heading/np.pi-1.,
             ])
 
         return newState
@@ -439,60 +407,14 @@ class AuvEnv(gym.Env):
         perr = self.positionTarget - position
         herr = headingError(self.headingTarget, heading)
 
-        # --- Reward 1: sum of all absolute errors scaled to reasonable value. ---
-        # angleScale = 180. / 180. * np.pi
-        # distScale = 0.3
-        # rewardTerms = -0.5*np.array([
-        #     min(1., np.abs(perr[0])/distScale),
-        #     min(1., np.abs(perr[1])/distScale),
-        #     min(1., np.abs(herr)/angleScale)
-        # ])
-
-        # --- Reward 2: reduce error in both position and heading errors. ---
-        # perr_o = self.positionTarget - self.position
-        # herr_o = headingError(self.headingTarget, self.heading)
-        # rewardTerms = np.array([
-        #     0.1*max(-1., min(1., np.abs(perr_o[0]) / max(1e-6, np.abs(perr[0])) - 1.)),
-        #     0.1*max(-1., min(1., np.abs(perr_o[1]) / max(1e-6, np.abs(perr[1])) - 1.)),
-        #     0.5*max(-1., min(1., np.abs(herr_o) / max(1e-6, np.abs(herr)) - 1.)),
-        #     -1.*sum(action**2.),
-        # ])
-
-        # --- Reward 3: reduce error in both position and heading errors. ---
-        # Reward components equal to zero at value=scaleFactor
-        # angleScale = 90. / 180. * np.pi
-        # distScale = 0.3
-        # perr_o = self.positionTarget - self.position
-        # herr_o = headingError(self.headingTarget, self.heading)
-        # This seems to help a fair bit in holding position
-        # if np.linalg.norm(perr) < 0.05:
-        #     bonus += 0.5
-        # if np.abs(herr) < 10./180.*np.pi:
-        #     bonus += 0.5
         rewardTerms = np.array([
-            # 0.1*np.clip(-np.log(max(1e-12, np.abs(perr[0])/distScale)), -2., 2.)/2.,
-            # 0.1*np.clip(-np.log(max(1e-12, np.abs(perr[1])/distScale)), -2., 2.)/2.,
-            # 0.1*np.clip(-np.log(max(1e-12, (np.abs(herr)/angleScale)**0.5)), -2., 2.)/2.,
-            # min(1., (np.linalg.norm(perr_o) - np.linalg.norm(perr))/0.1),
-            # min(1., (np.abs(herr_o) - np.linalg.norm(herr))/0.1),
-            # -(np.abs(herr)/np.pi)**0.5,
-            # This does quite well for position.
-            # 0.5*np.tanh((1.-np.linalg.norm(perr)/0.05)*np.pi),
-            # np.tanh((1.-np.abs(herr)/(15./180.*np.pi))*np.pi),
-            # Try to add a smooth gradient and peak reward for psi
-            # np.tanh(np.pi-np.abs(herr))*2.-1.,
-
-            # These two are okay
-            # -max(-1., np.linalg.norm(perr)**0.5),
-            # -(np.abs(herr))**0.5,
-
-            # This seems to obscure achieving the objective
-            # -0.2*sum((action*[1., 1., 0.1])**2.),
-
+            # Square error along all DoF
             -np.sum(np.clip(np.abs([perr[0], perr[1], herr])/[0.3, 0.3, 0.5*np.pi], 0., 1.)**2.),
-
+            # Bonus for being close to the objective.
             0.333*np.sum(np.abs([perr[0], perr[1], herr]) < [0.02, 0.02, 25./180.*np.pi]),
-
+            # Penalty for actuation to encourage it to do nothing when possible.
+            -0.05*np.sum(action**2.),
+            # Additional bonuses or penalties.
             bonus,
         ])
 
@@ -550,140 +472,4 @@ def make_env(rank, seed=0, envKwargs={}):
         return env
     return _init
     pass
-
-
-if __name__ == "__main__":
-
-    modelName = "SAC_try3"
-
-    # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
-    #   and see if something could be used here, too.
-
-    # No. parallel processes.
-    nProc = 16
-    # Do everything N times to rule out random successes and failures.
-    nModels = 3
-
-    # TODO adjust the hyperparameters here.
-    nTrainingSteps = 3_000_000
-
-    model_kwargs = {
-        'learning_rate': 5e-4,
-        'gamma': 0.95,
-        'verbose': 1,
-        'buffer_size': int(1e6),
-        "use_sde_at_warmup": True,
-        'batch_size': 32*32*4,
-        'learning_starts': 32*32*2,
-        'train_freq': [4, "step"],
-        "action_noise": VectorizedActionNoise(NormalActionNoise(
-            np.zeros(3), 0.1*np.ones(3)), nProc)
-    }
-    policy_kwargs = {
-        "use_sde": True,
-        # ReLU GELU Sigmoid SiLU SELU
-        "activation_fn": torch.nn.GELU,
-        "net_arch": dict(
-            # Actor - determines action for a specific state
-            pi=[64, 64],
-            # Critic - estimates value of each state-action combination
-            qf=[128, 128],
-        )
-    }
-    # TODO compare weights somehow to see if some common features appear?
-    # model.actor.latent_pi[0].weight.shape
-    # model.critic.qf0[0].weight.shape
-
-    # Train several times to make sure the agent doesn't just get lucky.
-    convergenceData = []
-    models = []
-    for iModel in range(nModels):
-        # Set up constants etc.
-        saveFile = "./modelData/{}_{:d}".format(modelName, iModel)
-        logDir = "./modelData/{}_{:d}_logs".format(modelName, iModel)
-        os.makedirs(logDir, exist_ok=True)
-
-        # Create the environments.
-        env_eval = AuvEnv()
-        env = SubprocVecEnv([make_env(i, envKwargs={}) for i in range(nProc)])
-        env = VecMonitor(env, logDir)
-
-        # Create the model using stable baselines.
-        model = stable_baselines3.SAC("MlpPolicy", env, policy_kwargs=policy_kwargs, **model_kwargs)
-
-        # Train the agent for N steps
-        starttime = datetime.datetime.now()
-        print("\nTraining of model", iModel, "started at", str(starttime))
-        model.learn(total_timesteps=nTrainingSteps, log_interval=1000)#, progress_bar=True
-        endtime = datetime.datetime.now()
-        trainingTime = (endtime-starttime).total_seconds()
-        print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
-
-        # Save.
-        model.save(saveFile)
-
-        # Retain convergence info and model.
-        convergenceData.append(pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1))
-        models.append(model)
-
-        print("Final reward {:.2f}".format(convergenceData[-1].rolling(200).mean()["r"].values[-1]))
-
-    # Save metadata in human-readable format.
-    with open("./modelData/{}_hyperparameters.yaml".format(modelName), "w") as outf:
-        data = {
-            "modelName": modelName,
-            "model_kwargs": model_kwargs.copy(),
-            "policy_kwargs": policy_kwargs.copy(),
-            "nTrainingSteps": nTrainingSteps,
-        }
-        # Change noise to human-readable format.
-        data["model_kwargs"]["action_noise"] = {
-            "mu": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._mu],
-            "sigma": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._sigma],
-            }
-        data["policy_kwargs"]["activation_fn"] = str(policy_kwargs["activation_fn"])
-        # Write.
-        yaml.dump(data, outf, default_flow_style=False)
-
-    # Plot convergence of each model.
-    fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 7))
-    plt.subplots_adjust(top=0.91, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
-    colours = plt.cm.plasma(np.linspace(0, 1, nModels))
-    lns = []
-    iBest = 0
-    rewardBest = -1e6
-    for iModel, convergence in enumerate(convergenceData):
-        rol = convergence.rolling(200).mean()
-        if rol["r"].values[-1] > rewardBest:
-            iBest = iModel
-            rewardBest = rol["r"].values[-1]
-        for i, f in enumerate(["r", "l"]):
-            ax[i].set_xlabel("Episode")
-            ax[i].set_ylabel(f.replace("r", "Reward").replace("l", "Episode length"))
-            ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.25, c=colours[iModel], zorder=-100)
-            ln, = ax[i].plot(convergence.index, rol[f], "-", c=colours[iModel], lw=2)
-            if i == 0:
-                lns.append(ln)
-    ax[0].set_ylim((max(ax[0].get_ylim()[0], -1500), ax[0].get_ylim()[1]))
-    fig.legend(lns, ["M{:d}".format(iModel) for iModel in range(nModels)],
-               loc="upper center", ncol=10)
-    plt.savefig("./modelData/{}_convergence.png".format(modelName), dpi=200, bbox_inches="tight")
-
-    # Pick the best model.
-    model = models[iBest]
-
-    # Trained agent.
-    print("\nAfter training")
-    mean_reward,_ = evaluate_agent(model, env_eval)
-    plotEpisode(env_eval, "RL control")
-
-    # Dumb agent.
-    print("\nSimple control")
-    env_eval_pd = AuvEnv()
-    pdController = PDController(env_eval_pd.dt)
-    mean_reward,_ = evaluate_agent(pdController, env_eval_pd)
-    fig, ax = plotEpisode(env_eval_pd, "Simple control")
-
-    # Compare detail
-    plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
 

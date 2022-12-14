@@ -8,18 +8,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
-import datetime
-import os
-import gym
-from gym.utils import seeding
-import torch
-import re
 import yaml
 import stable_baselines3
-from stable_baselines3.common.vec_env import VecMonitor
-from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common import results_plotter
-from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
 
 import verySimpleAuv as auv
 
