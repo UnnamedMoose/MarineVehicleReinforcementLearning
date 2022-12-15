@@ -66,5 +66,5 @@ if __name__ == "__main__":
     fig, ax = auv.plotEpisode(env_eval_pd, "Simple control")
 
     # Compare detail
-    auv.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
+    auv.plotDetail([env_eval_pd], labels=["Simple control", "RL control"])
 

@@ -346,7 +346,6 @@ class AuvEnv(gym.Env):
         self.headingStart = self.heading
         self.headingTarget = np.random.rand()*2.*np.pi
         self.velocities = np.zeros(3)
-        self.accelerations = np.zeros(3)
         self.time = 0
         self.iStep = 0
         self.steps_beyond_done = 0
@@ -369,21 +368,45 @@ class AuvEnv(gym.Env):
         Fset = action[:2]*self.maxForce
         Nset = action[2]*self.maxMoment
 
-        # Compute total forces and moments in the global reference frame.
+        # Coordinate transformation from vehicle to global reference frame.
+        Jtransform = np.array([
+            [np.cos(self.heading), -np.sin(self.heading), 0.],
+            [np.sin(self.heading), np.cos(self.heading), 0.],
+            [0., 0., 1.],
+        ])
+        # Inverse transform to go from global to vehicle axes.
+        invJtransform = np.linalg.pinv(Jtransform)
+
+        # TODO implement a current model.
+        velCurrent = np.array([0., 0.])
+
+        # Relative fluid velocity in the vehicle reference frame. For added mass,
+        # one could assume rate of change of fluid velocity is much smaller than
+        # that of the vehicle, hence d/dt(v-vc) = dv/dt.
+        velRel = np.dot(invJtransform[:-1, :-1], self.velocities[:2] - velCurrent)
+
+        # Compute hydrodynamic forces and moments in the vehicle reference frame.
         # NOTE: this is a very simplified problem definition, ignoring rigid body
         #   accelerations and cross-coupling terms.
-        X = (self.Xu + self.Xuu*np.abs(self.velocities[0]))*self.velocities[0] + Fset[0]
-        Y = (self.Yv + self.Yvv*np.abs(self.velocities[1]))*self.velocities[1] + Fset[1]
-        N = (self.Nr + self.Nrr*np.abs(self.velocities[2]))*self.velocities[2] + Nset
+        Fhydro = np.array([
+            (self.Xu + self.Xuu*np.abs(velRel[0]))*velRel[0],
+            (self.Yv + self.Yvv*np.abs(velRel[1]))*velRel[1],
+            (self.Nr + self.Nrr*np.abs(self.velocities[2]))*self.velocities[2],
+        ])
+
+        # Transform the forces to the global coordinate system.
+        Fhydro = np.dot(Jtransform, Fhydro)
+
+        # Vector of accelerations in the global reference frame.
+        # NOTE: this ignores added mass and inertia due to fluid accelerations.
+        accelerations = np.array([
+            (Fhydro[0]+Fset[0])/self.m,
+            (Fhydro[1]+Fset[1])/self.m,
+            (Fhydro[2]+Nset)/self.Izz
+        ])
 
         # Advance using the Euler method.
-        # NOTE: this ignores added mass and inertia due to fluid accelerations.
-        self.accelerations = np.array([
-            X/self.m,
-            Y/self.m,
-            N/self.Izz
-        ])
-        dydt = np.append(self.velocities, self.accelerations)
+        dydt = np.append(self.velocities, accelerations)
         y = np.concatenate([self.position, [self.heading], self.velocities])
         y = y + dydt*self.dt
         position = y[:2]
@@ -437,7 +460,7 @@ class AuvEnv(gym.Env):
                 +["s{:d}".format(i) for i in range(len(self.state))],
             np.concatenate([
                 [self.iStep, self.time, reward], self.position, [self.heading], self.positionTarget, [self.headingTarget],
-                [X, Y, N, Fset[0], Fset[1], Nset],
+                Fhydro, Fset, [Nset],
                 velocities,
                 rewardTerms, action, self.state])
             )))
