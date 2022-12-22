@@ -36,6 +36,10 @@ if __name__ == "__main__":
     # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
     #   and see if something could be used here, too.
 
+    # TODO review "Deep Reinforcement Learning Algorithms for Ship Navigation in Restricted Waters"
+
+    # TODO review "Path-following optimal control of autonomous underwater vehicle based on deep reinforcement learning"
+
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.

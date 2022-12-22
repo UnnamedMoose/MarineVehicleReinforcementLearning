@@ -232,7 +232,8 @@ def plotDetail(envs_to_plot, labels=None, title=""):
 class PDController(object):
     """ Simple controller that emulates the action of a model used in stable baselines.
     The returned forces are capped at +/- 1 to mimic actions of an RL agent.
-    Observations are assumed to start with direction to target and scaled heading error. """
+    Observations are assumed to start with direction to target, scaled heading error and
+    distance to the target. """
     def __init__(self, dt, P=[1., 1., 1.], D=[0.05, 0.05, 0.01]):
         self.P = np.array(P)
         self.D = np.array(D)

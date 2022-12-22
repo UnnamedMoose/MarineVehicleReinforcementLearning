@@ -38,14 +38,14 @@ class ReconstructedFlow(object):
         # Check source grid spacing. It should be uniform in both directions.
         # Note that the flow data is stored in (y, x) orientation, following
         #   the convention used by matplotlib.
-        self.dx = self.baseCoords[0, 1:, 0] - self.baseCoords[0, :-1, 0]
-        self.dy = self.baseCoords[1:, 0, 1] - self.baseCoords[:-1, 0, 1]
-        if not np.all(np.abs(self.dx - self.dx[0]) < 1e-6):
+        self.baseDx = self.baseCoords[0, 1:, 0] - self.baseCoords[0, :-1, 0]
+        self.baseDy = self.baseCoords[1:, 0, 1] - self.baseCoords[:-1, 0, 1]
+        if not np.all(np.abs(self.baseDx - self.baseDx[0]) < 1e-6):
             raise ValueError("Non-uniform input grid spacing in the x-direction")
-        if not np.all(np.abs(self.dy - self.dy[0]) < 1e-6):
+        if not np.all(np.abs(self.baseDy - self.baseDy[0]) < 1e-6):
             raise ValueError("Non-uniform input grid spacing in the y-direction")
-        self.dx = self.dx[0]
-        self.dy = self.dy[0]
+        self.baseDx = self.baseDx[0]
+        self.baseDy = self.baseDy[0]
 
     def interp(self, time, xy):
         """
@@ -69,8 +69,8 @@ class ReconstructedFlow(object):
 
         # Interpolation coordinate as a function of grid spacing and time step.
         tt = time / self.baseDt
-        xx = xy[0] / self.dx
-        yy = xy[1] / self.dy
+        xx = xy[0] / self.baseDx
+        yy = xy[1] / self.baseDy
         # Index of interpolation point below the interpolation coordinate.
         kk = min(self.baseTime.shape[0]-2, max(0, int(np.floor(tt))))
         ii = min(self.baseCoords.shape[1]-2, max(0, int(np.floor(xx))))
@@ -131,4 +131,3 @@ if __name__ == "__main__":
                 levels=np.linspace(0.75, 1.25, 15), cmap=plt.cm.jet)
     ax.set_aspect("equal")
     ax.plot(x[:, 0], x[:, 1], "k.")
-    ax.plot(x[:, 1], x[:, 0], "r.")
