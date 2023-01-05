@@ -22,18 +22,12 @@ class ReconstructedFlow(object):
         for iTime in range(self.baseFlowData.shape[0]):
             self.baseFlowData[iTime, :, :, :] = np.real(np.matmul(self.modes, self.coeffs[:, iTime])) + self.lt_mean
 
-        # Compute turbulence intensity on the plane.
-        self.uPrime = np.sqrt(np.sum((self.baseFlowData[:, :, :, 0] - 1.)**2., axis=0)/self.baseFlowData.shape[0])
-        self.vPrime = np.sqrt(np.sum((self.baseFlowData[:, :, :, 1] - 0.)**2., axis=0)/self.baseFlowData.shape[0])
-        self.TI = np.sqrt(0.5*(self.uPrime + self.vPrime))
-
         # Read the time step size and coordinates of input data.
         with open(os.path.join(dataDir, "params_coeffs.yaml"), "r") as infile:
             params = yaml.safe_load(infile)
         self.baseDt = params["time_step"]
         self.baseTime = np.array([i*params["time_step"] for i in range(self.baseFlowData.shape[0])])
         self.baseCoords = np.load(os.path.join(dataDir, "turbulence_coords.npy"))
-        self.baseTI = self.TI[self.TI.shape[0]//2, self.TI.shape[1]//2]
 
         # Check source grid spacing. It should be uniform in both directions.
         # Note that the flow data is stored in (y, x) orientation, following
@@ -49,6 +43,12 @@ class ReconstructedFlow(object):
 
         # Initialise scaled values used by the interpolator.
         self.scale(1., 1., 1.)
+
+        # Compute turbulence intensity on the plane.
+        self.uPrime = np.sqrt(np.sum((self.flowData[:, :, :, 0] - 1.)**2., axis=0)/self.flowData.shape[0])
+        self.vPrime = np.sqrt(np.sum((self.flowData[:, :, :, 1] - 0.)**2., axis=0)/self.flowData.shape[0])
+        self.TI = np.sqrt(0.5*(self.uPrime + self.vPrime))
+        self.baseTI = self.TI[self.TI.shape[0]//2, self.TI.shape[1]//2]
 
     def scale(self, sizeScale, velocityScale, turbScale, translate=(0, 0)):
         """
@@ -135,6 +135,9 @@ class ReconstructedFlow(object):
 
         return res
 
+    # TODO add a function for interpolating the entire snapshot in order to make
+    # animated replays of episodes.
+
 
 # %% Check
 if __name__ == "__main__":
@@ -145,6 +148,16 @@ if __name__ == "__main__":
     # Plot turbulence intensity levels.
     fig, ax = plt.subplots()
     cs = plt.contourf(flow.coords[:, :, 0], flow.coords[:, :, 1], flow.TI)
+    plt.colorbar(cs)
+    ax.set_aspect("equal")
+
+    fig, ax = plt.subplots()
+    cs = plt.contourf(flow.coords[:, :, 0], flow.coords[:, :, 1], flow.uPrime)
+    plt.colorbar(cs)
+    ax.set_aspect("equal")
+
+    fig, ax = plt.subplots()
+    cs = plt.contourf(flow.coords[:, :, 0], flow.coords[:, :, 1], flow.vPrime)
     plt.colorbar(cs)
     ax.set_aspect("equal")
 

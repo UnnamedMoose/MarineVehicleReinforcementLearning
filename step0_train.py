@@ -31,7 +31,7 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
-    modelName = "SAC_try3"
+    modelName = "SAC_try4"
 
     # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
     #   and see if something could be used here, too.
@@ -170,4 +170,3 @@ if __name__ == "__main__":
 
     # Compare detail
     auv.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
-

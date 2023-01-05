@@ -8,9 +8,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
+import re
+import warnings
 import gym
 from gym.utils import seeding
-import re
+
+import flowGenerator
 
 # Configure the coordinate system. Either use directions like they would appear
 # on a map (consistent with manoeuvring theory) or like they appear in traditional
@@ -211,12 +214,14 @@ def plotDetail(envs_to_plot, labels=None, title=""):
         if nEnvs > 1:
             ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
 
-    fig, ax = plt.subplots()
-    ax.set_xlabel("Time step")
-    ax.set_ylabel("Reward")
-    for iEnv in range(nEnvs):
-        ax.plot(envs_to_plot[iEnv].timeHistory["reward"], "-", lw=2,
-                c=caseColours[iEnv], label=labels[iEnv])
+    flabs = ["Reward", "u$_{current}$ [m/s]", "v$_{current}$ [m/s]"]
+    for i, f in enumerate(["reward", "u_current", "v_current"]):
+        fig, ax = plt.subplots()
+        ax.set_xlabel("Time step")
+        ax.set_ylabel(flabs[i])
+        for iEnv in range(nEnvs):
+            ax.plot(envs_to_plot[iEnv].timeHistory[f], "-", lw=2,
+                    c=caseColours[iEnv], label=labels[iEnv])
 
     for f in envs_to_plot[0].timeHistory.keys():
         if re.match("a[0-9]+", f) or re.match("s[0-9]+", f) or re.match("r[0-9]+", f):
@@ -270,7 +275,9 @@ class AuvEnv(gym.Env):
         super(AuvEnv, self).__init__()
         self.seed = seed
 
-        self._max_episode_steps = 200
+        # Tied to the no. time values stored in the turbulence data set.
+        # self._max_episode_steps = 1500
+        self._max_episode_steps = 250
 
         # Updates at fixed intervals.
         self.iStep = 0
@@ -278,6 +285,11 @@ class AuvEnv(gym.Env):
 
         self.state = None
         self.steps_beyond_done = None
+
+        # Load the flow data and scale to reasonable values. Keep this fixed for now.
+        dataDir = "./turbulenceData"
+        self.flow = flowGenerator.ReconstructedFlow(dataDir)
+        self.flow.scale(11., 1.0, 2., translate=(-1.65, -1.1))
 
         # time trace of all important quantities. Most retrieved from the vehicle model itself
         self.timeHistory = []
@@ -346,6 +358,10 @@ class AuvEnv(gym.Env):
         self.heading = np.random.rand()*2.*np.pi
         self.headingStart = self.heading
         self.headingTarget = np.random.rand()*2.*np.pi
+
+        # random initial time in the first 25% of flow data.
+        self.flowDataTimeOffset = np.random.rand()*self.flow.time[self.flow.time.shape[0]//4]
+
         self.velocities = np.zeros(3)
         self.time = 0
         self.iStep = 0
@@ -378,8 +394,11 @@ class AuvEnv(gym.Env):
         # Inverse transform to go from global to vehicle axes.
         invJtransform = np.linalg.pinv(Jtransform)
 
-        # TODO implement a current model.
-        velCurrent = np.array([0., 0.])
+        # Use pre-made turbulence data to generate a turbid current.
+        velCurrent = self.flow.interp(self.time+self.flowDataTimeOffset, self.position)[:2]
+        if self.time+self.flowDataTimeOffset > self.flow.time[-1]:
+            warnings.warn("Time value outside of input turbulence data range!")
+        # velCurrent = np.array([0., 0.])
 
         # Relative fluid velocity in the vehicle reference frame. For added mass,
         # one could assume rate of change of fluid velocity is much smaller than
@@ -455,14 +474,14 @@ class AuvEnv(gym.Env):
         self.timeHistory.append(dict(zip(
             ["step", "time", "reward", "x", "y", "psi", "x_d", "y_d", "psi_d"] \
                 +["Fx", "Fy", "N", "Fx_set", "Fy_set", "N_set"] \
-                +["u", "v", "r"]\
+                +["u", "v", "r", "u_current", "v_current"]\
                 +["r{:d}".format(i) for i in range(len(rewardTerms))] \
                 +["a{:d}".format(i) for i in range(len(action))] \
                 +["s{:d}".format(i) for i in range(len(self.state))],
             np.concatenate([
                 [self.iStep, self.time, reward], self.position, [self.heading], self.positionTarget, [self.headingTarget],
                 Fhydro, Fset, [Nset],
-                velocities,
+                velocities, velCurrent,
                 rewardTerms, action, self.state])
             )))
         if done:
@@ -498,3 +517,11 @@ def make_env(rank, seed=0, envKwargs={}):
     return _init
     pass
 
+
+if __name__ == "__main__":
+    print("\nSimple control")
+    env_eval_pd = AuvEnv()
+    pdController = PDController(env_eval_pd.dt)
+    mean_reward,_ = evaluate_agent(pdController, env_eval_pd)
+    fig, ax = plotEpisode(env_eval_pd, "Simple control")
+    plotDetail([env_eval_pd], labels=["Simple control"])
