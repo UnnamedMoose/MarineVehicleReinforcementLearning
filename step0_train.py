@@ -40,6 +40,8 @@ if __name__ == "__main__":
 
     # TODO review "Path-following optimal control of autonomous underwater vehicle based on deep reinforcement learning"
 
+    # TODO review "Autonomous Underwater Vehicle Path Planning Method of Soft Actor–Critic Based on Game Training"
+
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
@@ -66,7 +68,7 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[64, 64],
+            pi=[128, 128],
             # Critic - estimates value of each state-action combination
             qf=[128, 128],
         )

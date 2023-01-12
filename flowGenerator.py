@@ -135,8 +135,28 @@ class ReconstructedFlow(object):
 
         return res
 
-    # TODO add a function for interpolating the entire snapshot in order to make
-    # animated replays of episodes.
+    def interpField(self, time):
+        """
+        Interpolate data for the entire plane in time only.
+
+        Parameters
+        ----------
+        time : float
+            Time value to interpolate for.
+
+        Returns
+        -------
+        numpy array of shape (Ny, Nx, Nfields).
+
+        """
+        tt = time / self.dt
+        kk = min(self.time.shape[0]-2, max(0, int(np.floor(tt))))
+        tt = np.array([1. - (tt-kk), tt-kk])
+        res = np.zeros((self.flowData.shape[1], self.flowData.shape[2], self.flowData.shape[3]))
+        for k in range(self.flowData.shape[3]):
+            res[:, :, k] = self.flowData[kk, :, :, k]*tt[0] \
+                + self.flowData[kk+1, :, :, k]*tt[1]
+        return res
 
 
 # %% Check
