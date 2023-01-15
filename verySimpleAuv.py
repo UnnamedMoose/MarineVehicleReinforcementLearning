@@ -348,10 +348,33 @@ class AuvEnv(gym.Env):
 
         return newState
 
-    def reset(self, keepTimeHistory=False):
+    def reset(self, keepTimeHistory=False, applyNoise=True):
         if self.seed is not None:
             self._np_random, self.seed = seeding.np_random(self.seed)
 
+        # Multipliers to mass, inertia and force coefficients used to improve
+        # exploration and test robustness.
+        if applyNoise:
+            magNoise = 0.1
+            self.mMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.IMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.XuuMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.YvvMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.NrrMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.XuMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.YvMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.NrMult = 1. + magNoise/2. - np.random.rand()*magNoise
+        else:
+            self.mMult = 1.
+            self.IMult = 1.
+            self.XuuMult = 1.
+            self.YvvMult = 1.
+            self.NrrMult = 1.
+            self.XuMult = 1.
+            self.YvMult = 1.
+            self.NrMult = 1.
+
+        # Set initial and target parameters.
         self.position = np.random.rand(2) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]] \
             + [self.xMinMax[0], self.yMinMax[0]]
         self.positionStart = self.position.copy()
@@ -410,9 +433,9 @@ class AuvEnv(gym.Env):
         # NOTE: this is a very simplified problem definition, ignoring rigid body
         #   accelerations and cross-coupling terms.
         Fhydro = np.array([
-            (self.Xu + self.Xuu*np.abs(velRel[0]))*velRel[0],
-            (self.Yv + self.Yvv*np.abs(velRel[1]))*velRel[1],
-            (self.Nr + self.Nrr*np.abs(self.velocities[2]))*self.velocities[2],
+            (self.Xu*self.XuMult + self.Xuu*self.XuuMult*np.abs(velRel[0]))*velRel[0],
+            (self.Yv*self.YvMult + self.Yvv*self.YvvMult*np.abs(velRel[1]))*velRel[1],
+            (self.Nr*self.NrMult + self.Nrr*self.NrrMult*np.abs(self.velocities[2]))*self.velocities[2],
         ])
 
         # Transform the forces to the global coordinate system.
@@ -421,9 +444,9 @@ class AuvEnv(gym.Env):
         # Vector of accelerations in the global reference frame.
         # NOTE: this ignores added mass and inertia due to fluid accelerations.
         accelerations = np.array([
-            (Fhydro[0]+Fset[0])/self.m,
-            (Fhydro[1]+Fset[1])/self.m,
-            (Fhydro[2]+Nset)/self.Izz
+            (Fhydro[0]+Fset[0])/(self.m*self.mMult),
+            (Fhydro[1]+Fset[1])/(self.m*self.mMult),
+            (Fhydro[2]+Nset)/(self.Izz*self.IMult)
         ])
 
         # Advance using the Euler method.

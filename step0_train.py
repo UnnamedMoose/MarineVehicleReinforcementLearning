@@ -33,34 +33,25 @@ if __name__ == "__main__":
 
     modelName = "SAC_try4"
 
-    # TODO review https://github.com/eleurent/highway-env/blob/master/highway_env/envs/parking_env.py
-    #   and see if something could be used here, too.
-
-    # TODO review "Deep Reinforcement Learning Algorithms for Ship Navigation in Restricted Waters"
-
-    # TODO review "Path-following optimal control of autonomous underwater vehicle based on deep reinforcement learning"
-
-    # TODO review "Autonomous Underwater Vehicle Path Planning Method of Soft Actor–Critic Based on Game Training"
-
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
     nModels = 3
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 3_000_000
+    nTrainingSteps = 300_000
 
     model_kwargs = {
-        'learning_rate': 5e-4,
-        'gamma': 0.95,
+        'learning_rate': 2e-4,#5e-4,
+        'gamma': 0.9,#0.95,
         'verbose': 1,
-        'buffer_size': int(1e6),
+        'buffer_size': 102400,#int(1e6),
         "use_sde_at_warmup": True,
-        'batch_size': 2048,
+        'batch_size': 128,#2048,
         'learning_starts': 1024,
-        'train_freq': (4, "step"),
-        "action_noise": VectorizedActionNoise(NormalActionNoise(
-            np.zeros(3), 0.1*np.ones(3)), nProc)
+        'train_freq': (1, "step"),#(4, "step"),
+        # "action_noise": VectorizedActionNoise(NormalActionNoise(
+        #     np.zeros(3), 0.1*np.ones(3)), nProc)
     }
     policy_kwargs = {
         "use_sde": True,
@@ -68,9 +59,9 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[128, 128],
+            pi=[5*10, 38, 30],#[128, 64, 32, 8],
             # Critic - estimates value of each state-action combination
-            qf=[128, 128],
+            qf=[5*10, 16, 5],#[128, 64, 32, 8],
         )
     }
 
@@ -121,10 +112,13 @@ if __name__ == "__main__":
             "nTrainingSteps": nTrainingSteps,
         }
         # Change noise to human-readable format.
-        data["model_kwargs"]["action_noise"] = {
-            "mu": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._mu],
-            "sigma": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._sigma],
-            }
+        try:
+            data["model_kwargs"]["action_noise"] = {
+                "mu": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._mu],
+                "sigma": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._sigma],
+                }
+        except KeyError:
+            pass
         # Convert types because yaml is yaml.
         data["policy_kwargs"]["activation_fn"] = str(policy_kwargs["activation_fn"])
         data["model_kwargs"]["train_freq"] = list(model_kwargs["train_freq"])
