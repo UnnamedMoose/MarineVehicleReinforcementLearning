@@ -11,6 +11,7 @@ import pandas
 import re
 import warnings
 import matplotlib.animation as animation
+import collections
 import gym
 from gym.utils import seeding
 
@@ -249,9 +250,11 @@ class PDController(object):
     def predict(self, obs):
         states = np.zeros(len(self.P))
 
-        # Drive the proportional term to zero when distance to the traget becomes small.
         x = obs[:3]
-        x[:2] *= min(1., obs[3]/0.1)
+
+        # Drive the proportional term to zero when distance to the
+        # traget becomes small.
+        # x[:2] *= min(1., obs[3]/0.1)
 
         if self.oldObs is None:
             self.oldObs = x
@@ -286,6 +289,7 @@ class AuvEnv(gym.Env):
 
         self.state = None
         self.steps_beyond_done = None
+        self.herr_o = 0.
 
         # Load the flow data and scale to reasonable values. Keep this fixed for now.
         dataDir = "./turbulenceData"
@@ -316,10 +320,13 @@ class AuvEnv(gym.Env):
         self.maxMoment = 20.  # Nm
 
         # Non-dimensional (x, y) force and yaw moment.
-        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
+        self.lenAction = 3
+        self.action_space = gym.spaces.Box(low=-1.0, high=1.0,
+                                           shape=(self.lenAction,), dtype=np.float32)
+
         # Observation space.
         # TODO change length here when adding new items to the state.
-        lenState = 5
+        lenState = 4
         self.observation_space = gym.spaces.Box(
             -1*np.ones(lenState, dtype=np.float32),
             np.ones(lenState, dtype=np.float32),
@@ -335,15 +342,23 @@ class AuvEnv(gym.Env):
         # Get heading error by comparing on both sides of zero.
         herr = headingError(self.headingTarget, heading)
 
-        # TODO add more items here. Basic controller needs the first four elements
+        # Initialise if called just after reset.
+        if self.herr_o is None:
+            self.herr_o = herr
+
+        # TODO add more items here. Basic controller needs the first three elements
         #   to stay as they are now.
         newState = np.array([
-            perr[0],
-            perr[1],
-            min(1., max(-1., herr/np.pi)),
-            dTarget,
-            # min(1., dTarget/0.1)  # TODO try this
-            min(1., max(-1., herr/(30./180.*np.pi))),
+            min(1., max(-1., perr[0]/0.2)),
+            min(1., max(-1., perr[1]/0.2)),
+            min(1., max(-1., herr/(45./180.*np.pi))),
+            # dTarget,
+            # min(1., max(-1, velocities[0]/0.5)),
+            # min(1., max(-1, velocities[1]/0.5)),
+            # min(1., max(-1, velocities[2]/(0.5*np.pi))),
+            min(1., max(-1., (herr-self.herr_o)/np.pi)),
+            # min(1., dTarget/0.1)
+            # min(1., max(-1., herr/(30./180.*np.pi))),
             ])
 
         return newState
@@ -355,7 +370,7 @@ class AuvEnv(gym.Env):
         # Multipliers to mass, inertia and force coefficients used to improve
         # exploration and test robustness.
         if applyNoise:
-            magNoise = 0.1
+            magNoise = 0.05
             self.mMult = 1. + magNoise/2. - np.random.rand()*magNoise
             self.IMult = 1. + magNoise/2. - np.random.rand()*magNoise
             self.XuuMult = 1. + magNoise/2. - np.random.rand()*magNoise
@@ -375,8 +390,7 @@ class AuvEnv(gym.Env):
             self.NrMult = 1.
 
         # Set initial and target parameters.
-        self.position = np.random.rand(2) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]] \
-            + [self.xMinMax[0], self.yMinMax[0]]
+        self.position = (np.random.rand(2)-0.5) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]]
         self.positionStart = self.position.copy()
         self.positionTarget = np.zeros(2)
         self.heading = np.random.rand()*2.*np.pi
@@ -386,12 +400,19 @@ class AuvEnv(gym.Env):
         # random initial time in the first 25% of flow data.
         self.flowDataTimeOffset = np.random.rand()*self.flow.time[self.flow.time.shape[0]//4]
 
+        # Used for checking action history in the reward.
+        self.recentActions = collections.deque(20*[None], 20)
+
+        # Other stuff.
         self.velocities = np.zeros(3)
         self.time = 0
         self.iStep = 0
         self.steps_beyond_done = 0
-        self.state = self.dataToState(self.position, self.heading, self.velocities)
+        self.herr_o = None
         self.timeHistory = []
+
+        # Get the initial state.
+        self.state = self.dataToState(self.position, self.heading, self.velocities)
 
         return self.state
 
@@ -404,6 +425,9 @@ class AuvEnv(gym.Env):
         done = False
         if self.iStep >= self._max_episode_steps:
             done = True
+
+        # Store the actions.
+        self.recentActions.appendleft(action)
 
         # Scale the actions.
         Fset = action[:2]*self.maxForce
@@ -475,13 +499,29 @@ class AuvEnv(gym.Env):
         perr = self.positionTarget - position
         herr = headingError(self.headingTarget, heading)
 
+        # Update for the next pass.
+        self.herr_o = herr
+
+        # Compute rms of recent actions.
+        # TODO fix
+        rmsAc = np.array([x for x in self.recentActions if x is not None])
+        rmsAc = np.sqrt(np.sum((rmsAc-np.mean(rmsAc))**2.) / len(rmsAc))
+
         rewardTerms = np.array([
-            # Square error along all DoF
-            -np.sum(np.clip(np.abs([perr[0], perr[1], herr])/[0.3, 0.3, 0.5*np.pi], 0., 1.)**2.),
-            # Bonus for being close to the objective.
-            0.333*np.sum(np.abs([perr[0], perr[1], herr]) < [0.02, 0.02, 25./180.*np.pi]),
-            # Penalty for actuation to encourage it to do nothing when possible.
-            -0.05*np.sum(action**2.),
+            # --- ver 0 ---
+            # # Square error along all DoF
+            # -np.sum(np.clip(np.abs([perr[0], perr[1], herr])/[0.3, 0.3, 0.5*np.pi], 0., 1.)**2.),
+            # # Bonus for being close to the objective.
+            # 0.333*np.sum(np.abs([perr[0], perr[1], herr]) < [0.02, 0.02, 25./180.*np.pi]),
+            # # Penalty for actuation to encourage it to do nothing when possible.
+            # -0.05*np.sum(action**2.),
+
+            # --- inspider by Woo et al. (2019) ---
+            np.exp(-0.1*np.abs(herr/np.pi*180)) if np.abs(herr) < np.pi/2 else -np.exp(-0.1*(180. - np.abs(herr/np.pi*180))),
+            np.exp(-5*np.linalg.norm(perr)),
+            np.exp(-0.4*rmsAc),
+
+            # ---
             # Additional bonuses or penalties.
             bonus,
         ])

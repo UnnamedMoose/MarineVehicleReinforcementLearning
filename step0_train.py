@@ -39,29 +39,28 @@ if __name__ == "__main__":
     nModels = 3
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 300_000
+    nTrainingSteps = 1_500_000
 
     model_kwargs = {
-        'learning_rate': 2e-4,#5e-4,
-        'gamma': 0.9,#0.95,
+        'learning_rate': 5e-4,
+        'gamma': 0.95,
         'verbose': 1,
-        'buffer_size': 102400,#int(1e6),
+        'buffer_size': (128*2)*512,
         "use_sde_at_warmup": True,
-        'batch_size': 128,#2048,
-        'learning_starts': 1024,
-        'train_freq': (1, "step"),#(4, "step"),
+        'batch_size': 128*2,
+        'learning_starts': 256,
+        'train_freq': (1, "step"),
         # "action_noise": VectorizedActionNoise(NormalActionNoise(
         #     np.zeros(3), 0.1*np.ones(3)), nProc)
     }
     policy_kwargs = {
         "use_sde": True,
-        # ReLU GELU Sigmoid SiLU SELU
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[5*10, 38, 30],#[128, 64, 32, 8],
+            pi=[128, 128],#5*10, 38, 30],
             # Critic - estimates value of each state-action combination
-            qf=[5*10, 16, 5],#[128, 64, 32, 8],
+            qf=[128, 128],#5*10, 16, 5],
         )
     }
 
