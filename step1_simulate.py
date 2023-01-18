@@ -22,7 +22,7 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
-    modelName = "SAC_try3"
+    modelName = "SAC_try4"
 
     # Create the environment and load the best model to-date.
     env_eval = auv.AuvEnv()
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     ax.set_xlim(xlim)
 
     # Trained agent.
-    print("\nAfter training")
+    print("\nSingle episode")
     mean_reward,_ = auv.evaluate_agent(model, env_eval)
     auv.plotEpisode(env_eval, "RL control")
 
@@ -68,3 +68,11 @@ if __name__ == "__main__":
     # Compare detail
     auv.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
 
+# %%
+    orientation = "right_up_anticlockwise"
+    from verySimpleAuv import plot_horizontal
+    import matplotlib.animation as animation
+
+
+    auv.animateEpisode(env_eval, "RL_control")
+    auv.animateEpisode(env_eval_pd, "naive_control")

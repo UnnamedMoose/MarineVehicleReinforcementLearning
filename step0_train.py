@@ -39,7 +39,7 @@ if __name__ == "__main__":
     nModels = 3
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 1_500_000
+    nTrainingSteps = 2_000_000
 
     model_kwargs = {
         'learning_rate': 5e-4,

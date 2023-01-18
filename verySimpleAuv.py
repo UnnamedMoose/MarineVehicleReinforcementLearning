@@ -133,6 +133,8 @@ def plot_horizontal(ax, x, y, psi, scale=1, markerSize=1, arrowSize=1, vehicleCo
 
 def plotEpisode(env_to_plot, title=""):
 
+    # TODO this shares a lot of code with animateEpisode. Could just use the latter
+
     fig, ax = plt.subplots(figsize=(10, 10))
 
     if orientation == "north_east_clockwise":
@@ -185,6 +187,141 @@ def plotEpisode(env_to_plot, title=""):
     ax.text(ax.get_xlim()[1], ax.get_ylim()[0], "  "+title, va="bottom", ha="right", size=18)
 
     return fig, ax
+
+
+def animateEpisode(env_plot, caseName):
+
+    # Plot contours (and animate)
+
+    # Set up the plot
+    fig, ax = plt.subplots(figsize=(10, 9))
+
+    if orientation == "north_east_clockwise":
+        ax.set_xlabel("y [m, +ve east]")
+        ax.set_ylabel("x [m, +ve north]")
+        i0 = 1
+        i1 = 0
+    elif orientation == "right_up_anticlockwise":
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("y [m]")
+        i0 = 0
+        i1 = 1
+    else:
+        raise ValueError("Wrong orientation")
+
+    ax.set_xlim(np.array(env_plot.xMinMax)+[-0.2, 0.2])
+    ax.set_ylim(np.array(env_plot.yMinMax)+[-0.2, 0.2])
+    ax.set_aspect("equal", "box")
+
+    # Plot constant elements
+    lns = []
+
+    lns += ax.plot([env_plot.positionTarget[i0]],
+                    [env_plot.positionTarget[i1]],
+                    "go--", lw=2, ms=8, mew=2, mec="g", mfc="None", label="$Waypoint$")
+
+    xyHeading = 0.5*np.cos(env_plot.headingTarget), 0.5*np.sin(env_plot.headingTarget)
+    lns += ax.plot([0, xyHeading[i0]], [0, xyHeading[i1]], "g-", lw=4, alpha=0.5, label="Target heading")
+
+    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[0, i0], env_plot.timeHistory[["x", "y"]].values[0, i1],
+            "bs", ms=11, mew=2, mec="b", mfc="None", label="$Start$")
+
+    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[-1, i0], env_plot.timeHistory[["x", "y"]].values[-1, i1],
+            "bd", ms=11, mew=2, mec="b", mfc="None", label="$End$")
+
+    # Plot the flow field.
+    iField = 0
+    levels = np.linspace(0.75, 1.25, 11)
+    cs = ax.contourf(env_plot.flow.coords[:, :, 0], env_plot.flow.coords[:, :, 1],
+                     env_plot.flow.interpField(env_plot.timeHistory.loc[0, "time"])[:, :, iField],
+                     levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
+
+    # Plot the AUV outline.
+    position = fig.add_axes([0.85, .25, 0.03, 0.5])
+    cbar = fig.colorbar(cs, cax=position, orientation="vertical")
+    cbar.set_label("u [m/s]")
+    plt.subplots_adjust(right=0.8)
+    auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[0],
+                                 env_plot.timeHistory["y"].values[0],
+                                 env_plot.timeHistory["psi"].values[0],
+                                 markerSize=0.5, arrowSize=1, scale=1, alpha=0.8)
+
+    # Plot vehicle and current speeds.
+    arrLen = 0.5
+    maxU = np.linalg.norm(env_plot.timeHistory[["u", "v"]].values, axis=1).max()
+    maxUc = np.linalg.norm(env_plot.timeHistory[["u_current", "v_current"]].values, axis=1).max()
+
+    arr_v = ax.arrow(
+        env_plot.timeHistory[["x", "y"]].values[0, i0],
+        env_plot.timeHistory[["x", "y"]].values[0, i1],
+        env_plot.timeHistory[["u", "v"]].values[0, i0]*arrLen/maxU,
+        env_plot.timeHistory[["u", "v"]].values[0, i1]*arrLen/maxU,
+        length_includes_head=True, zorder=100,
+        width=0.01, edgecolor="None", facecolor="red")
+    arr_v_dummy = ax.plot([0, 0], [0, 1], "r-", lw=2, label="V$_{AUV}$")[0]
+    lns.append(arr_v_dummy)
+    arr_v_dummy.remove()
+
+    arr_c = ax.arrow(
+        env_plot.timeHistory[["x", "y"]].values[0, i0],
+        env_plot.timeHistory[["x", "y"]].values[0, i1],
+        env_plot.timeHistory[["u_current", "v_current"]].values[0, i0]*arrLen/maxUc,
+        env_plot.timeHistory[["u_current", "v_current"]].values[0, i1]*arrLen/maxUc,
+        length_includes_head=True, zorder=100,
+        width=0.01, edgecolor="None", facecolor="magenta")
+    arr_c_dummy = ax.plot([0, 0], [0, 1], "m-", lw=2, label="V$_{flow}$")[0]
+    lns.append(arr_c_dummy)
+    arr_c_dummy.remove()
+
+    # Plot the entire trajectory
+    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[:, i0], env_plot.timeHistory[["x", "y"]].values[:, i1], "k-",
+        mec="k", lw=2, mew=2, ms=9, mfc="None", label="$Trajectory$")
+
+    # Add the legend.
+    ax.legend(lns, [l.get_label() for l in lns], loc="lower center",
+                    bbox_to_anchor=(0.5, 1.01), prop={"size":18}, ncol=4)
+
+    class AuvPlot(object):
+        def __init__(self, cs, auvObjects, arr_c, arr_v):
+            self.cs = cs
+            self.auvObjects = auvObjects
+            self.arr_c = arr_c
+            self.arr_v = arr_v
+
+        def animate(self, i):
+            # global cs, auvObjects, arr_c, arr_v
+            # removes only the contours, leaves the rest intact
+            for c in self.cs.collections:
+                c.remove()
+            for c in self.auvObjects:
+                c.remove()
+            self.cs = ax.contourf(env_plot.flow.coords[:, :, 0], env_plot.flow.coords[:, :, 1],
+                             env_plot.flow.interpField(env_plot.timeHistory.loc[i, "time"])[:, :, iField],
+                             levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
+
+            self.auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[i],
+                                         env_plot.timeHistory["y"].values[i],
+                                         env_plot.timeHistory["psi"].values[i],
+                                         markerSize=0.5, arrowSize=1, scale=1, alpha=0.8)
+
+            self.arr_v.set_data(
+                x=env_plot.timeHistory[["x", "y"]].values[i, i0],
+                y=env_plot.timeHistory[["x", "y"]].values[i, i1],
+                dx=env_plot.timeHistory[["u", "v"]].values[i, i0]*arrLen/maxU,
+                dy=env_plot.timeHistory[["u", "v"]].values[i, i1]*arrLen/maxU)
+            self.arr_c.set_data(
+                x=env_plot.timeHistory[["x", "y"]].values[i, i0],
+                y=env_plot.timeHistory[["x", "y"]].values[i, i1],
+                dx=env_plot.timeHistory[["u_current", "v_current"]].values[i, i0]*arrLen/maxUc,
+                dy=env_plot.timeHistory[["u_current", "v_current"]].values[i, i1]*arrLen/maxU)
+
+            return self.cs, self.auvObjects
+
+    auvPlot = AuvPlot(cs, auvObjects, arr_c, arr_v)
+
+    anim = animation.FuncAnimation(fig, auvPlot.animate, repeat=False, frames=env_plot.timeHistory.shape[0])
+    writer = animation.PillowWriter(fps=20)
+    anim.save('./episodeAnim_{}.gif'.format(caseName), writer=writer, dpi=75)
 
 
 def plotDetail(envs_to_plot, labels=None, title=""):
@@ -336,8 +473,8 @@ class AuvEnv(gym.Env):
         # Non-dimensionalise the position error (unit vector towards the target).
         perr = self.positionTarget - pos
         # NOTE for arbitrary motion this would need to be scaled and clipped to <-1, 1/0>
-        dTarget = np.linalg.norm(perr)
-        perr /= max(1e-6, dTarget)
+        # dTarget = np.linalg.norm(perr)
+        # perr /= max(1e-6, dTarget)
 
         # Get heading error by comparing on both sides of zero.
         herr = headingError(self.headingTarget, heading)
@@ -356,7 +493,7 @@ class AuvEnv(gym.Env):
             # min(1., max(-1, velocities[0]/0.5)),
             # min(1., max(-1, velocities[1]/0.5)),
             # min(1., max(-1, velocities[2]/(0.5*np.pi))),
-            min(1., max(-1., (herr-self.herr_o)/np.pi)),
+            min(1., max(-1., (herr-self.herr_o)/(2./180*np.pi))),
             # min(1., dTarget/0.1)
             # min(1., max(-1., herr/(30./180.*np.pi))),
             ])
@@ -503,9 +640,9 @@ class AuvEnv(gym.Env):
         self.herr_o = herr
 
         # Compute rms of recent actions.
-        # TODO fix
         rmsAc = np.array([x for x in self.recentActions if x is not None])
-        rmsAc = np.sqrt(np.sum((rmsAc-np.mean(rmsAc))**2.) / len(rmsAc))
+        rmsAc = np.sqrt(np.sum((rmsAc-np.mean(rmsAc, axis=0))**2., axis=0) / rmsAc.shape[0])
+        rmsAc = np.mean(rmsAc)
 
         rewardTerms = np.array([
             # --- ver 0 ---
@@ -517,9 +654,9 @@ class AuvEnv(gym.Env):
             # -0.05*np.sum(action**2.),
 
             # --- inspider by Woo et al. (2019) ---
-            np.exp(-0.1*np.abs(herr/np.pi*180)) if np.abs(herr) < np.pi/2 else -np.exp(-0.1*(180. - np.abs(herr/np.pi*180))),
             np.exp(-5*np.linalg.norm(perr)),
-            np.exp(-0.4*rmsAc),
+            np.exp(-0.1*np.abs(herr/np.pi*180)) if np.abs(herr) < np.pi/2 else -np.exp(-0.1*(180. - np.abs(herr/np.pi*180))),
+            0.25*np.exp(-0.4*rmsAc),
 
             # ---
             # Additional bonuses or penalties.
@@ -589,141 +726,17 @@ if __name__ == "__main__":
             "size": 16}
     matplotlib.rc("font", **font)
 
+    # Run an example episode with classical control
     print("\nSimple control")
     env_eval_pd = AuvEnv()
     pdController = PDController(env_eval_pd.dt)
     mean_reward,_ = evaluate_agent(pdController, env_eval_pd)
+
+    # Plot time history on top of the flow field
     fig, ax = plotEpisode(env_eval_pd, "Simple control")
+
+    # Plot detailed time histories of state, action, etc.
     plotDetail([env_eval_pd], labels=["Simple control"])
 
-
     # Plot an animated replay of the time history.
-
-
-# %%
-    makeAnimation = True
-    caseName = "naive"
-
-    # Plot contours (and animate)
-
-    # Set up the plot
-    fig, ax = plt.subplots(figsize=(10, 9))
-
-    if orientation == "north_east_clockwise":
-        ax.set_xlabel("y [m, +ve east]")
-        ax.set_ylabel("x [m, +ve north]")
-        i0 = 1
-        i1 = 0
-    elif orientation == "right_up_anticlockwise":
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("y [m]")
-        i0 = 0
-        i1 = 1
-    else:
-        raise ValueError("Wrong orientation")
-
-    ax.set_xlim(np.array(env_eval_pd.xMinMax)+[-0.2, 0.2])
-    ax.set_ylim(np.array(env_eval_pd.yMinMax)+[-0.2, 0.2])
-    ax.set_aspect("equal", "box")
-
-    # Plot constant elements
-    lns = []
-
-    lns += ax.plot([env_eval_pd.positionTarget[i0]],
-                    [env_eval_pd.positionTarget[i1]],
-                    "go--", lw=2, ms=8, mew=2, mec="g", mfc="None", label="$Waypoint$")
-
-    xyHeading = 0.5*np.cos(env_eval_pd.headingTarget), 0.5*np.sin(env_eval_pd.headingTarget)
-    lns += ax.plot([0, xyHeading[i0]], [0, xyHeading[i1]], "g-", lw=4, alpha=0.5, label="Target heading")
-
-    lns += ax.plot(env_eval_pd.timeHistory[["x", "y"]].values[0, i0], env_eval_pd.timeHistory[["x", "y"]].values[0, i1],
-            "bs", ms=11, mew=2, mec="b", mfc="None", label="$Start$")
-
-    lns += ax.plot(env_eval_pd.timeHistory[["x", "y"]].values[-1, i0], env_eval_pd.timeHistory[["x", "y"]].values[-1, i1],
-            "bd", ms=11, mew=2, mec="b", mfc="None", label="$End$")
-
-    # Plot the flow field.
-    iField = 0
-    levels = np.linspace(0.75, 1.25, 11)
-    cs = ax.contourf(env_eval_pd.flow.coords[:, :, 0], env_eval_pd.flow.coords[:, :, 1],
-                     env_eval_pd.flow.interpField(env_eval_pd.timeHistory.loc[0, "time"])[:, :, iField],
-                     levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
-
-    # Plot the AUV outline.
-    position = fig.add_axes([0.85, .25, 0.03, 0.5])
-    cbar = fig.colorbar(cs, cax=position, orientation="vertical")
-    cbar.set_label("u [m/s]")
-    plt.subplots_adjust(right=0.8)
-    auvObjects = plot_horizontal(ax, env_eval_pd.timeHistory["x"].values[0],
-                                 env_eval_pd.timeHistory["y"].values[0],
-                                 env_eval_pd.timeHistory["psi"].values[0],
-                                 markerSize=0.5, arrowSize=1, scale=1, alpha=0.8)
-
-    # Plot vehicle and current speeds.
-    arrLen = 0.5
-    maxU = np.linalg.norm(env_eval_pd.timeHistory[["u", "v"]].values, axis=1).max()
-    maxUc = np.linalg.norm(env_eval_pd.timeHistory[["u_current", "v_current"]].values, axis=1).max()
-
-    arr_v = ax.arrow(
-        env_eval_pd.timeHistory[["x", "y"]].values[0, i0],
-        env_eval_pd.timeHistory[["x", "y"]].values[0, i1],
-        env_eval_pd.timeHistory[["u", "v"]].values[0, i0]*arrLen/maxU,
-        env_eval_pd.timeHistory[["u", "v"]].values[0, i1]*arrLen/maxU,
-        length_includes_head=True, zorder=100,
-        width=0.01, edgecolor="None", facecolor="red")
-    arr_v_dummy = ax.plot([0, 0], [0, 1], "r-", lw=2, label="V$_{AUV}$")[0]
-    lns.append(arr_v_dummy)
-    arr_v_dummy.remove()
-
-    arr_c = ax.arrow(
-        env_eval_pd.timeHistory[["x", "y"]].values[0, i0],
-        env_eval_pd.timeHistory[["x", "y"]].values[0, i1],
-        env_eval_pd.timeHistory[["u_current", "v_current"]].values[0, i0]*arrLen/maxUc,
-        env_eval_pd.timeHistory[["u_current", "v_current"]].values[0, i1]*arrLen/maxUc,
-        length_includes_head=True, zorder=100,
-        width=0.01, edgecolor="None", facecolor="magenta")
-    arr_c_dummy = ax.plot([0, 0], [0, 1], "m-", lw=2, label="V$_{flow}$")[0]
-    lns.append(arr_c_dummy)
-    arr_c_dummy.remove()
-
-    # Plot the entire trajectory
-    lns += ax.plot(env_eval_pd.timeHistory[["x", "y"]].values[:, i0], env_eval_pd.timeHistory[["x", "y"]].values[:, i1], "k-",
-        mec="k", lw=2, mew=2, ms=9, mfc="None", label="$Trajectory$")
-
-    # Add the legend.
-    ax.legend(lns, [l.get_label() for l in lns], loc="lower center",
-                    bbox_to_anchor=(0.5, 1.01), prop={"size":18}, ncol=4)
-
-    def animate(i):
-        global cs, auvObjects, arr_c, arr_v
-        # removes only the contours, leaves the rest intact
-        for c in cs.collections:
-            c.remove()
-        for c in auvObjects:
-            c.remove()
-        cs = ax.contourf(env_eval_pd.flow.coords[:, :, 0], env_eval_pd.flow.coords[:, :, 1],
-                         env_eval_pd.flow.interpField(env_eval_pd.timeHistory.loc[i, "time"])[:, :, iField],
-                         levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
-
-        auvObjects = plot_horizontal(ax, env_eval_pd.timeHistory["x"].values[i],
-                                     env_eval_pd.timeHistory["y"].values[i],
-                                     env_eval_pd.timeHistory["psi"].values[i],
-                                     markerSize=0.5, arrowSize=1, scale=1, alpha=0.8)
-
-        arr_v.set_data(
-            x=env_eval_pd.timeHistory[["x", "y"]].values[i, i0],
-            y=env_eval_pd.timeHistory[["x", "y"]].values[i, i1],
-            dx=env_eval_pd.timeHistory[["u", "v"]].values[i, i0]*arrLen/maxU,
-            dy=env_eval_pd.timeHistory[["u", "v"]].values[i, i1]*arrLen/maxU)
-        arr_c.set_data(
-            x=env_eval_pd.timeHistory[["x", "y"]].values[i, i0],
-            y=env_eval_pd.timeHistory[["x", "y"]].values[i, i1],
-            dx=env_eval_pd.timeHistory[["u_current", "v_current"]].values[i, i0]*arrLen/maxUc,
-            dy=env_eval_pd.timeHistory[["u_current", "v_current"]].values[i, i1]*arrLen/maxU)
-
-        return cs, auvObjects
-
-    if makeAnimation:
-        anim = animation.FuncAnimation(fig, animate, repeat=False, frames=env_eval_pd.timeHistory.shape[0])
-        writer = animation.PillowWriter(fps=20)
-        anim.save('./episodeAnim_{}.gif'.format(caseName), writer=writer, dpi=75)
+    animateEpisode(env_eval_pd, "test")
