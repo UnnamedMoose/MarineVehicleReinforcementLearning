@@ -31,7 +31,7 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
-    modelName = "SAC_try4"
+    modelName = "SAC_try5"
 
     # No. parallel processes.
     nProc = 16
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     nModels = 3
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 2_000_000
+    nTrainingSteps = 2_000_00
 
     model_kwargs = {
         'learning_rate': 5e-4,
@@ -58,10 +58,15 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[128, 128],#5*10, 38, 30],
+            pi=[128, 128],
             # Critic - estimates value of each state-action combination
-            qf=[128, 128],#5*10, 16, 5],
+            qf=[128, 128],
         )
+    }
+    # Noise in coefficients for training only.
+    env_kwargs = {
+        "noiseMagActuation": 0.1,
+        "noiseMagCoeffs": 0.05,
     }
 
     # TODO compare weights somehow to see if some common features appear?
@@ -79,7 +84,7 @@ if __name__ == "__main__":
 
         # Create the environments.
         env_eval = auv.AuvEnv()
-        env = SubprocVecEnv([auv.make_env(i, envKwargs={}) for i in range(nProc)])
+        env = SubprocVecEnv([auv.make_env(i, env_kwargs=env_kwargs) for i in range(nProc)])
         env = VecMonitor(env, logDir)
 
         # Create the model using stable baselines.

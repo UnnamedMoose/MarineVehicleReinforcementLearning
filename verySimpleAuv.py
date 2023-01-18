@@ -411,7 +411,7 @@ def headingError(psi_d, psi):
 
 
 class AuvEnv(gym.Env):
-    def __init__(self, seed=None, dt=0.02):
+    def __init__(self, seed=None, dt=0.02, noiseMagCoeffs=0.0, noiseMagActuation=0.0):
         # Call base class constructor.
         super(AuvEnv, self).__init__()
         self.seed = seed
@@ -455,6 +455,11 @@ class AuvEnv(gym.Env):
         # Max actuation
         self.maxForce = 150.  # N
         self.maxMoment = 20.  # Nm
+
+        # Noise amplitudes for coefficients and max actuation.
+        # Used to encourage generalised training.
+        self.noiseMagCoeffs = noiseMagCoeffs
+        self.noiseMagActuation = noiseMagActuation
 
         # Non-dimensional (x, y) force and yaw moment.
         self.lenAction = 3
@@ -507,15 +512,17 @@ class AuvEnv(gym.Env):
         # Multipliers to mass, inertia and force coefficients used to improve
         # exploration and test robustness.
         if applyNoise:
-            magNoise = 0.05
-            self.mMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.IMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.XuuMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.YvvMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.NrrMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.XuMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.YvMult = 1. + magNoise/2. - np.random.rand()*magNoise
-            self.NrMult = 1. + magNoise/2. - np.random.rand()*magNoise
+            self.mMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.IMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.XuuMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.YvvMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.NrrMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.XuMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.YvMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.NrMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
+            self.XactMult = 1. + self.noiseMagActuation/2. - np.random.rand()*self.noiseMagActuation
+            self.YactMult = 1. + self.noiseMagActuation/2. - np.random.rand()*self.noiseMagActuation
+            self.NactMult = 1. + self.noiseMagActuation/2. - np.random.rand()*self.noiseMagActuation
         else:
             self.mMult = 1.
             self.IMult = 1.
@@ -525,6 +532,9 @@ class AuvEnv(gym.Env):
             self.XuMult = 1.
             self.YvMult = 1.
             self.NrMult = 1.
+            self.XactMult = 1.
+            self.YactMult = 1.
+            self.NactMult = 1.
 
         # Set initial and target parameters.
         self.position = (np.random.rand(2)-0.5) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]]
@@ -567,8 +577,8 @@ class AuvEnv(gym.Env):
         self.recentActions.appendleft(action)
 
         # Scale the actions.
-        Fset = action[:2]*self.maxForce
-        Nset = action[2]*self.maxMoment
+        Fset = action[:2]*self.maxForce*[self.XactMult, self.YactMult]
+        Nset = action[2]*self.maxMoment*self.NactMult
 
         # Coordinate transformation from vehicle to global reference frame.
         Jtransform = np.array([
@@ -583,7 +593,6 @@ class AuvEnv(gym.Env):
         velCurrent = self.flow.interp(self.time+self.flowDataTimeOffset, self.position)[:2]
         if self.time+self.flowDataTimeOffset > self.flow.time[-1]:
             warnings.warn("Time value outside of input turbulence data range!")
-        # velCurrent = np.array([0., 0.])
 
         # Relative fluid velocity in the vehicle reference frame. For added mass,
         # one could assume rate of change of fluid velocity is much smaller than
@@ -627,10 +636,10 @@ class AuvEnv(gym.Env):
         # Check if domain exceeded.
         if (position[0] < self.xMinMax[0]) or (position[0] > self.xMinMax[1]):
             done = True
-            bonus += -1000.
+            bonus += -100.
         if (position[1] < self.yMinMax[0]) or (position[1] > self.yMinMax[1]):
             done = True
-            bonus += -1000.
+            bonus += -100.
 
         # TODO add more components here.
         perr = self.positionTarget - position
@@ -702,7 +711,7 @@ class AuvEnv(gym.Env):
         pass
 
 
-def make_env(rank, seed=0, envKwargs={}):
+def make_env(rank, seed=0, env_kwargs={}):
     """
     Utility function for multiprocessed env.
 
@@ -711,7 +720,7 @@ def make_env(rank, seed=0, envKwargs={}):
     :param rank: (int) index of the subprocess
     """
     def _init():
-        env = AuvEnv(seed=seed+rank, **envKwargs)
+        env = AuvEnv(seed=seed+rank, **env_kwargs)
         # env.seed(seed + rank)
         # env.reset(seed=seed+rank)
         return env
