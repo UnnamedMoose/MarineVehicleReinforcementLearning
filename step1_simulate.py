@@ -12,6 +12,7 @@ import yaml
 import stable_baselines3
 
 import verySimpleAuv as auv
+import resources
 
 font = {"family": "serif",
         "weight": "normal",
@@ -21,6 +22,8 @@ matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
+
+    makeAnimation = False
 
     modelName = "SAC_try4"
 
@@ -43,7 +46,7 @@ if __name__ == "__main__":
     ax.plot(convergence.index, convergence.rolling(200).mean()["r"], "-", c="r", lw=2)
 
     # Evaluate for a large number of episodes to test robustness.
-    mean_reward, allRewards = auv.evaluate_agent(model, env_eval, num_episodes=100)
+    mean_reward, allRewards = resources.evaluate_agent(model, env_eval, num_episodes=100)
     fig, ax = plt.subplots()
     ax.set_xlabel("Episode")
     ax.set_ylabel("Reward")
@@ -55,24 +58,20 @@ if __name__ == "__main__":
 
     # Trained agent.
     print("\nSingle episode")
-    mean_reward,_ = auv.evaluate_agent(model, env_eval)
-    auv.plotEpisode(env_eval, "RL control")
+    mean_reward,_ = resources.evaluate_agent(model, env_eval)
+    resources.plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
     env_eval_pd = auv.AuvEnv()
     pdController = auv.PDController(env_eval_pd.dt)
-    mean_reward,_ = auv.evaluate_agent(pdController, env_eval_pd)
-    fig, ax = auv.plotEpisode(env_eval_pd, "Simple control")
+    mean_reward,_ = resources.evaluate_agent(pdController, env_eval_pd)
+    fig, ax = resources.plotEpisode(env_eval_pd, "Simple control")
 
     # Compare detail
-    auv.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
+    resources.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
 
-# %%
-    orientation = "right_up_anticlockwise"
-    from verySimpleAuv import plot_horizontal
-    import matplotlib.animation as animation
-
-
-    auv.animateEpisode(env_eval, "RL_control")
-    auv.animateEpisode(env_eval_pd, "naive_control")
+    # Animate. Takes a long time.
+    if makeAnimation:
+        resources.animateEpisode(env_eval, "RL_control")
+        resources.animateEpisode(env_eval_pd, "naive_control")

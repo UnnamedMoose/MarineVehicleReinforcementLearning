@@ -21,6 +21,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
 
 import verySimpleAuv as auv
+import resources
 
 font = {"family": "serif",
         "weight": "normal",
@@ -31,6 +32,9 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
+    modelToRestart = "SAC_try4"
+    # modelToRestart = None
+
     modelName = "SAC_try5"
 
     # No. parallel processes.
@@ -39,7 +43,7 @@ if __name__ == "__main__":
     nModels = 3
 
     # TODO adjust the hyperparameters here.
-    nTrainingSteps = 2_000_00
+    nTrainingSteps = 1_000_000
 
     model_kwargs = {
         'learning_rate': 5e-4,
@@ -65,8 +69,8 @@ if __name__ == "__main__":
     }
     # Noise in coefficients for training only.
     env_kwargs = {
-        "noiseMagActuation": 0.1,
-        "noiseMagCoeffs": 0.05,
+        "noiseMagActuation": 0.2,
+        "noiseMagCoeffs": 0.1,
     }
 
     # TODO compare weights somehow to see if some common features appear?
@@ -88,7 +92,12 @@ if __name__ == "__main__":
         env = VecMonitor(env, logDir)
 
         # Create the model using stable baselines.
-        model = stable_baselines3.SAC("MlpPolicy", env, policy_kwargs=policy_kwargs, **model_kwargs)
+        if modelToRestart is None:
+            model = stable_baselines3.SAC(
+                "MlpPolicy", env, policy_kwargs=policy_kwargs, **model_kwargs)
+        else:
+            model = stable_baselines3.SAC.load("./bestModel/{}".format(modelToRestart))
+            model.env = env
 
         # Train the agent for N steps
         starttime = datetime.datetime.now()
@@ -158,15 +167,15 @@ if __name__ == "__main__":
 
     # Trained agent.
     print("\nAfter training")
-    mean_reward,_ = auv.evaluate_agent(model, env_eval)
-    auv.plotEpisode(env_eval, "RL control")
+    mean_reward,_ = resources.evaluate_agent(model, env_eval)
+    resources.plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
     env_eval_pd = auv.AuvEnv()
     pdController = auv.PDController(env_eval_pd.dt)
-    mean_reward,_ = auv.evaluate_agent(pdController, env_eval_pd)
-    fig, ax = auv.plotEpisode(env_eval_pd, "Simple control")
+    mean_reward,_ = resources.evaluate_agent(pdController, env_eval_pd)
+    fig, ax = resources.plotEpisode(env_eval_pd, "Simple control")
 
     # Compare detail
-    auv.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
+    resources.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])
