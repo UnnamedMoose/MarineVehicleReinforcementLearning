@@ -40,7 +40,7 @@ if __name__ == "__main__":
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
-    nModels = 3
+    nModels = 1
 
     # TODO adjust the hyperparameters here.
     nTrainingSteps = 1_000_000
@@ -97,7 +97,7 @@ if __name__ == "__main__":
                 "MlpPolicy", env, policy_kwargs=policy_kwargs, **model_kwargs)
         else:
             model = stable_baselines3.SAC.load("./bestModel/{}".format(modelToRestart))
-            model.env = env
+            model.set_env(env)
 
         # Train the agent for N steps
         starttime = datetime.datetime.now()
