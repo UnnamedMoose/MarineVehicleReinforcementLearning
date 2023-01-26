@@ -23,9 +23,11 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
+    # ---
+    # Controls
     makeAnimation = False
-
-    modelName = "SAC_try4"
+    modelName = "SAC_try5"
+    # ---
 
     # Create the environment and load the best model to-date.
     env_eval = auv.AuvEnv()
