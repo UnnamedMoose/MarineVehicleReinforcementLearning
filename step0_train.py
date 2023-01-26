@@ -11,6 +11,7 @@ import pandas
 import datetime
 import os
 import gym
+import shutil
 from gym.utils import seeding
 import torch
 import re
@@ -32,18 +33,21 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
 
-    modelToRestart = "SAC_try4"
-    # modelToRestart = None
+    modelToRestart = None
+    # modelToRestart = "SAC_try4"
+    # modelToRestart = "SAC_try5_noCurrent_noTurb"
+    # modelToRestart = "SAC_try5_noTurb"
 
-    modelName = "SAC_try5"
+    # modelName = "SAC_try5_noCurrent_noTurb"
+    # modelName = "SAC_try5_noTurb"
+    modelName = "SAC_try6"
 
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
     nModels = 1
 
-    # TODO adjust the hyperparameters here.
-    nTrainingSteps = 1_000_000
+    nTrainingSteps = 1_000_0
 
     model_kwargs = {
         'learning_rate': 5e-4,
@@ -51,14 +55,14 @@ if __name__ == "__main__":
         'verbose': 1,
         'buffer_size': (128*2)*512,
         "use_sde_at_warmup": True,
-        'batch_size': 128*2,
+        'batch_size': 256,
         'learning_starts': 256,
         'train_freq': (1, "step"),
         # "action_noise": VectorizedActionNoise(NormalActionNoise(
         #     np.zeros(3), 0.1*np.ones(3)), nProc)
     }
     policy_kwargs = {
-        "use_sde": True,
+        "use_sde": False,
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
@@ -67,8 +71,10 @@ if __name__ == "__main__":
             qf=[128, 128],
         )
     }
-    # Noise in coefficients for training only.
     env_kwargs = {
+        "currentVelScale": 0.5,
+        "currentTurbScale": 2.0,
+        # Use noise in coefficients for training only.
         "noiseMagActuation": 0.2,
         "noiseMagCoeffs": 0.1,
     }
@@ -110,6 +116,9 @@ if __name__ == "__main__":
         # Save.
         model.save(saveFile)
 
+        # Move the monitor to make it easier to find.
+        shutil.copyfile(os.path.join(logDir, "monitor.csv"), saveFile+"_monitor.csv")
+
         # Retain convergence info and model.
         convergenceData.append(pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1))
         models.append(model)
@@ -122,6 +131,7 @@ if __name__ == "__main__":
             "modelName": modelName,
             "model_kwargs": model_kwargs.copy(),
             "policy_kwargs": policy_kwargs.copy(),
+            "env_kwargs": env_kwargs.copy(),
             "nTrainingSteps": nTrainingSteps,
         }
         # Change noise to human-readable format.

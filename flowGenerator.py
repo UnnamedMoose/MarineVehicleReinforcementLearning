@@ -87,11 +87,11 @@ class ReconstructedFlow(object):
         self.flowData[:, :, :, 1] = (self.flowData[:, :, :, 1] - 0.)*turbScale
 
         # Recalculate the pressure coefficient.
-        self.flowData[:, :, :, 2] /= (velocityScale*turbScale)**2.
+        self.flowData[:, :, :, 2] /= max(1e-6, (velocityScale*turbScale)**2.)
 
         # Set the new time. Assume that convection velocity is the same relative to
         # the size of the grid.
-        self.dt = self.baseDt*sizeScale/velocityScale
+        self.dt = self.baseDt*sizeScale/max(1e-6, velocityScale)
         self.time = np.array([i*self.dt for i in range(self.baseFlowData.shape[0])])
 
     def interp(self, time, xy):
@@ -167,6 +167,7 @@ if __name__ == "__main__":
 
     # Plot turbulence intensity levels.
     fig, ax = plt.subplots()
+    ax.set_title("TI")
     cs = plt.contourf(flow.coords[:, :, 0], flow.coords[:, :, 1], flow.TI)
     plt.colorbar(cs)
     ax.set_aspect("equal")

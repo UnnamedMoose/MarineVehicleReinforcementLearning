@@ -67,7 +67,8 @@ def headingError(psi_d, psi):
 
 
 class AuvEnv(gym.Env):
-    def __init__(self, seed=None, dt=0.02, noiseMagCoeffs=0.0, noiseMagActuation=0.0):
+    def __init__(self, seed=None, dt=0.02, noiseMagCoeffs=0.0, noiseMagActuation=0.0,
+                 currentVelScale=1.0, currentTurbScale=2.0):
         # Call base class constructor.
         super(AuvEnv, self).__init__()
         self.seed = seed
@@ -87,7 +88,7 @@ class AuvEnv(gym.Env):
         # Load the flow data and scale to reasonable values. Keep this fixed for now.
         dataDir = "./turbulenceData"
         self.flow = flowGenerator.ReconstructedFlow(dataDir)
-        self.flow.scale(11., 1.0, 2., translate=(-1.65, -1.1))
+        self.flow.scale(11., currentVelScale, currentTurbScale, translate=(-1.65, -1.1))
 
         # time trace of all important quantities. Most retrieved from the vehicle model itself
         self.timeHistory = []
@@ -150,13 +151,7 @@ class AuvEnv(gym.Env):
             min(1., max(-1., perr[0]/0.2)),
             min(1., max(-1., perr[1]/0.2)),
             min(1., max(-1., herr/(45./180.*np.pi))),
-            # dTarget,
-            # min(1., max(-1, velocities[0]/0.5)),
-            # min(1., max(-1, velocities[1]/0.5)),
-            # min(1., max(-1, velocities[2]/(0.5*np.pi))),
             min(1., max(-1., (herr-self.herr_o)/(2./180*np.pi))),
-            # min(1., dTarget/0.1)
-            # min(1., max(-1., herr/(30./180.*np.pi))),
             ])
 
         return newState
@@ -297,7 +292,7 @@ class AuvEnv(gym.Env):
             done = True
             bonus += -100.
 
-        # TODO add more components here.
+        # Compute errors.
         perr = self.positionTarget - position
         herr = headingError(self.headingTarget, heading)
 
