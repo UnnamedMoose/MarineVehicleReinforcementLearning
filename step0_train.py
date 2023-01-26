@@ -40,17 +40,17 @@ if __name__ == "__main__":
 
     # modelName = "SAC_try5_noCurrent_noTurb"
     # modelName = "SAC_try5_noTurb"
-    modelName = "SAC_try6"
+    modelName = "SAC_try6_LR_5e-3_gamma_0.95_batchSize_256"
 
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
-    nModels = 1
+    nModels = 3
 
-    nTrainingSteps = 1_000_0
+    nTrainingSteps = 1_000_000
 
     model_kwargs = {
-        'learning_rate': 5e-4,
+        'learning_rate': 5e-3,
         'gamma': 0.95,
         'verbose': 1,
         'buffer_size': (128*2)*512,
@@ -72,8 +72,9 @@ if __name__ == "__main__":
         )
     }
     env_kwargs = {
-        "currentVelScale": 0.5,
-        "currentTurbScale": 2.0,
+        # Set to zero to disable the flow - much faster training.
+        "currentVelScale": 1.,
+        "currentTurbScale": 2.,
         # Use noise in coefficients for training only.
         "noiseMagActuation": 0.2,
         "noiseMagCoeffs": 0.1,
