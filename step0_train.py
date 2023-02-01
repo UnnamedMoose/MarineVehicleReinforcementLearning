@@ -40,14 +40,15 @@ if __name__ == "__main__":
 
     # modelName = "SAC_try5_noCurrent_noTurb"
     # modelName = "SAC_try5_noTurb"
-    modelName = "SAC_try6_LR_5e-3_gamma_0.95_batchSize_256"
+    # modelName = "SAC_try6_LR_5e-3_gamma_0.95_batchSize_256"
+    modelName = "SAC_try6"
 
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
     nModels = 3
 
-    nTrainingSteps = 1_000_000
+    nTrainingSteps = 3_000_000
 
     model_kwargs = {
         'learning_rate': 5e-3,
@@ -76,7 +77,7 @@ if __name__ == "__main__":
         "currentVelScale": 1.,
         "currentTurbScale": 2.,
         # Use noise in coefficients for training only.
-        "noiseMagActuation": 0.2,
+        "noiseMagActuation": 0.1,
         "noiseMagCoeffs": 0.1,
     }
 

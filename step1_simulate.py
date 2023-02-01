@@ -26,7 +26,14 @@ if __name__ == "__main__":
     # ---
     # Controls
     makeAnimation = False
-    modelName = "SAC_try5"
+
+    # state=[perr/0.2, herr/45, (herr-herr_o)/2]
+    # reward=[exp(-5perr), exp(-0.1herr/180), 0.25exp(0.4rms)]
+    # modelName = "SAC_try5"
+
+    # state=[perr/0.2, herr/45, (herr-herr_o)/2, (perr-perr_o)/0.05, velocities/[0.2, 0.2, 30]]
+    # reward=[exp(-5perr), exp(-0.1herr/180), exp(-0.6rms)]
+    modelName = "SAC_try6"
     # ---
 
     # Create the environment and load the best model to-date.

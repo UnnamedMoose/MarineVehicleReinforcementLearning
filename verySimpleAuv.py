@@ -83,6 +83,7 @@ class AuvEnv(gym.Env):
 
         self.state = None
         self.steps_beyond_done = None
+        self.perr_0 = np.zeros(2)
         self.herr_o = 0.
 
         # Load the flow data and scale to reasonable values. Keep this fixed for now.
@@ -124,8 +125,7 @@ class AuvEnv(gym.Env):
                                            shape=(self.lenAction,), dtype=np.float32)
 
         # Observation space.
-        # TODO change length here when adding new items to the state.
-        lenState = 4
+        lenState = 9
         self.observation_space = gym.spaces.Box(
             -1*np.ones(lenState, dtype=np.float32),
             np.ones(lenState, dtype=np.float32),
@@ -144,15 +144,21 @@ class AuvEnv(gym.Env):
         # Initialise if called just after reset.
         if self.herr_o is None:
             self.herr_o = herr
+            self.perr_o = perr
 
         # TODO add more items here. Basic controller needs the first three elements
         #   to stay as they are now.
-        newState = np.array([
-            min(1., max(-1., perr[0]/0.2)),
-            min(1., max(-1., perr[1]/0.2)),
-            min(1., max(-1., herr/(45./180.*np.pi))),
-            min(1., max(-1., (herr-self.herr_o)/(2./180*np.pi))),
-            ])
+        newState = np.append(
+            np.array([
+                min(1., max(-1., perr[0]/0.2)),
+                min(1., max(-1., perr[1]/0.2)),
+                min(1., max(-1., herr/(45./180.*np.pi))),
+                min(1., max(-1., (herr-self.herr_o)/(2./180*np.pi))),
+                min(1., max(-1., (perr[0]-self.perr_o[0])/0.025)),
+                min(1., max(-1., (perr[1]-self.perr_o[1])/0.025)),
+            ]),
+            np.clip(velocities/[0.2, 0.2, 30./180*np.pi], -1., 1.)
+        )
 
         return newState
 
@@ -163,29 +169,13 @@ class AuvEnv(gym.Env):
         # Multipliers to mass, inertia and force coefficients used to improve
         # exploration and test robustness.
         if applyNoise:
-            self.mMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.IMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.XuuMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.YvvMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.NrrMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.XuMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.YvMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.NrMult = 1. + self.noiseMagCoeffs/2. - np.random.rand()*self.noiseMagCoeffs
-            self.XactMult = 1. + self.noiseMagActuation/2. - np.random.rand()*self.noiseMagActuation
-            self.YactMult = 1. + self.noiseMagActuation/2. - np.random.rand()*self.noiseMagActuation
-            self.NactMult = 1. + self.noiseMagActuation/2. - np.random.rand()*self.noiseMagActuation
+            self.mMult, self.IMult, self.XuuMult, self.YvvMult, self.NrrMult, self.XuMult, \
+                self.YvMult, self.NrMult = 1. + self.noiseMagCoeffs/2. - np.random.rand(8)*self.noiseMagCoeffs
+            self.XactMult, self.YactMult, self.NactMult = \
+                1. + self.noiseMagActuation/2. - np.random.rand(3)*self.noiseMagActuation
         else:
-            self.mMult = 1.
-            self.IMult = 1.
-            self.XuuMult = 1.
-            self.YvvMult = 1.
-            self.NrrMult = 1.
-            self.XuMult = 1.
-            self.YvMult = 1.
-            self.NrMult = 1.
-            self.XactMult = 1.
-            self.YactMult = 1.
-            self.NactMult = 1.
+            self.mMult, self.IMult, self.XuuMult, self.YvvMult, self.NrrMult, self.XuMult, \
+                self.YvMult, self.NrMult, self.XactMult, self.YactMult, self.NactMult = np.ones(11)
 
         # Set initial and target parameters.
         self.position = (np.random.rand(2)-0.5) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]]
@@ -199,7 +189,7 @@ class AuvEnv(gym.Env):
         self.flowDataTimeOffset = np.random.rand()*self.flow.time[self.flow.time.shape[0]//4]
 
         # Used for checking action history in the reward.
-        self.recentActions = collections.deque(20*[None], 20)
+        self.recentActions = collections.deque(40*[None], 40)
 
         # Other stuff.
         self.velocities = np.zeros(3)
@@ -207,6 +197,7 @@ class AuvEnv(gym.Env):
         self.iStep = 0
         self.steps_beyond_done = 0
         self.herr_o = None
+        self.perr_o = None
         self.timeHistory = []
 
         # Get the initial state.
@@ -298,6 +289,7 @@ class AuvEnv(gym.Env):
 
         # Update for the next pass.
         self.herr_o = herr
+        self.perr_o = perr
 
         # Compute rms of recent actions.
         rmsAc = np.array([x for x in self.recentActions if x is not None])
@@ -316,7 +308,7 @@ class AuvEnv(gym.Env):
             # --- inspider by Woo et al. (2019) ---
             np.exp(-5*np.linalg.norm(perr)),
             np.exp(-0.1*np.abs(herr/np.pi*180)) if np.abs(herr) < np.pi/2 else -np.exp(-0.1*(180. - np.abs(herr/np.pi*180))),
-            0.25*np.exp(-0.4*rmsAc),
+            np.exp(-0.6*rmsAc),
 
             # ---
             # Additional bonuses or penalties.
