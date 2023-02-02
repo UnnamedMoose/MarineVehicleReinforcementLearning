@@ -55,27 +55,30 @@ if __name__ == "__main__":
     ax.plot(convergence.index, convergence.rolling(200).mean()["r"], "-", c="r", lw=2)
 
     # Evaluate for a large number of episodes to test robustness.
+    print("\nRL agent")
     mean_reward, allRewards = resources.evaluate_agent(model, env_eval, num_episodes=100)
-    fig, ax = plt.subplots()
-    ax.set_xlabel("Episode")
-    ax.set_ylabel("Reward")
-    ax.bar(range(len(allRewards)), allRewards, color="r")
-    xlim = ax.get_xlim()
-    ax.plot(xlim, [mean_reward]*2, "r--", lw=4, alpha=0.5)
-    ax.plot(xlim, [0]*2, "k-", lw=1)
-    ax.set_xlim(xlim)
-
-    # Trained agent.
-    print("\nSingle episode")
-    mean_reward,_ = resources.evaluate_agent(model, env_eval)
     resources.plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
     env_eval_pd = auv.AuvEnv()
     pdController = auv.PDController(env_eval_pd.dt)
-    mean_reward,_ = resources.evaluate_agent(pdController, env_eval_pd)
+    mean_reward_pd, allRewards_pd = resources.evaluate_agent(pdController, env_eval_pd, num_episodes=100)
     fig, ax = resources.plotEpisode(env_eval_pd, "Simple control")
+
+    # Compare stats.
+    fig, ax = plt.subplots()
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Reward")
+    x = np.array(range(len(allRewards)))
+    ax.bar(x-0.4, allRewards, 0.4, align="edge", color="r", label="RL control")
+    ax.bar(x, allRewards_pd, 0.4, align="edge", color="b", label="Simple control")
+    xlim = ax.get_xlim()
+    ax.plot(xlim, [mean_reward]*2, "r--", lw=4, alpha=0.5)
+    ax.plot(xlim, [mean_reward_pd]*2, "b--", lw=4, alpha=0.5)
+    ax.plot(xlim, [0]*2, "k-", lw=1)
+    ax.set_xlim(xlim)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
 
     # Compare detail
     resources.plotDetail([env_eval_pd, env_eval], labels=["Simple control", "RL control"])

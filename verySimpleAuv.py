@@ -146,8 +146,7 @@ class AuvEnv(gym.Env):
             self.herr_o = herr
             self.perr_o = perr
 
-        # TODO add more items here. Basic controller needs the first three elements
-        #   to stay as they are now.
+        # Basic controller needs the first three elements to stay as they are now.
         newState = np.append(
             np.array([
                 min(1., max(-1., perr[0]/0.2)),

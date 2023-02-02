@@ -153,7 +153,7 @@ if __name__ == "__main__":
     # Plot convergence of each model.
     fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 7))
     plt.subplots_adjust(top=0.91, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
-    colours = plt.cm.plasma(np.linspace(0, 1, nModels))
+    colours = plt.cm.plasma(np.linspace(0, 0.9, nModels))
     lns = []
     iBest = 0
     rewardBest = -1e6
@@ -165,7 +165,7 @@ if __name__ == "__main__":
         for i, f in enumerate(["r", "l"]):
             ax[i].set_xlabel("Episode")
             ax[i].set_ylabel(f.replace("r", "Reward").replace("l", "Episode length"))
-            ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.25, c=colours[iModel], zorder=-100)
+            ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.5, c=colours[iModel], zorder=-100)
             ln, = ax[i].plot(convergence.index, rol[f], "-", c=colours[iModel], lw=2)
             if i == 0:
                 lns.append(ln)
