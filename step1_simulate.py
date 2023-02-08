@@ -8,6 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
+import os
 import yaml
 import stable_baselines3
 
@@ -22,6 +23,8 @@ matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
+    # An ugly fix for OpenMP conflicts in my installation.
+    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
     # ---
     # Controls
@@ -33,7 +36,11 @@ if __name__ == "__main__":
 
     # state=[perr/0.2, herr/45, (herr-herr_o)/2, (perr-perr_o)/0.05, velocities/[0.2, 0.2, 30]]
     # reward=[exp(-5perr), exp(-0.1herr/180), exp(-0.6rms)]
-    modelName = "SAC_try6"
+    # mean reward ~590, about the same as simple control.
+    # modelName = "SAC_try6"
+
+    # Additional penalty for minimising actuation, 3*128 layers
+    modelName = "SAC_try7"
     # ---
 
     # Create the environment and load the best model to-date.

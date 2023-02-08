@@ -32,29 +32,26 @@ matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
+    # An ugly fix for OpenMP conflicts in my installation.
+    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
     modelToRestart = None
-    # modelToRestart = "SAC_try4"
-    # modelToRestart = "SAC_try5_noCurrent_noTurb"
-    # modelToRestart = "SAC_try5_noTurb"
+    # modelToRestart = "SAC_try6"
 
-    # modelName = "SAC_try5_noCurrent_noTurb"
-    # modelName = "SAC_try5_noTurb"
-    # modelName = "SAC_try6_LR_5e-3_gamma_0.95_batchSize_256"
-    modelName = "SAC_try6"
+    modelName = "SAC_try7"
 
     # No. parallel processes.
     nProc = 16
     # Do everything N times to rule out random successes and failures.
-    nModels = 3
+    nModels = 1
 
     nTrainingSteps = 3_000_000
 
     model_kwargs = {
-        'learning_rate': 5e-3,
+        'learning_rate': 2e-3,
         'gamma': 0.95,
         'verbose': 1,
-        'buffer_size': (128*2)*512,
+        'buffer_size': (128*3)*512,
         "use_sde_at_warmup": True,
         'batch_size': 256,
         'learning_starts': 256,
@@ -67,9 +64,9 @@ if __name__ == "__main__":
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             # Actor - determines action for a specific state
-            pi=[128, 128],
+            pi=[128, 128, 128],
             # Critic - estimates value of each state-action combination
-            qf=[128, 128],
+            qf=[128, 128, 128],
         )
     }
     env_kwargs = {
@@ -126,6 +123,10 @@ if __name__ == "__main__":
         models.append(model)
 
         print("Final reward {:.2f}".format(convergenceData[-1].rolling(200).mean()["r"].values[-1]))
+
+        # Evaluate
+        env_eval = auv.AuvEnv()
+        resources.evaluate_agent(model, env_eval, num_episodes=100)
 
     # Save metadata in human-readable format.
     with open("./modelData/{}_hyperparameters.yaml".format(modelName), "w") as outf:

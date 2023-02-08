@@ -147,7 +147,7 @@ class AuvEnv(gym.Env):
             self.perr_o = perr
 
         # Basic controller needs the first three elements to stay as they are now.
-        newState = np.append(
+        newState = np.concatenate([
             np.array([
                 min(1., max(-1., perr[0]/0.2)),
                 min(1., max(-1., perr[1]/0.2)),
@@ -156,8 +156,8 @@ class AuvEnv(gym.Env):
                 min(1., max(-1., (perr[0]-self.perr_o[0])/0.025)),
                 min(1., max(-1., (perr[1]-self.perr_o[1])/0.025)),
             ]),
-            np.clip(velocities/[0.2, 0.2, 30./180*np.pi], -1., 1.)
-        )
+            np.clip(velocities/[0.2, 0.2, 30./180.*np.pi], -1., 1.)
+        ])
 
         return newState
 
@@ -188,7 +188,7 @@ class AuvEnv(gym.Env):
         self.flowDataTimeOffset = np.random.rand()*self.flow.time[self.flow.time.shape[0]//4]
 
         # Used for checking action history in the reward.
-        self.recentActions = collections.deque(40*[None], 40)
+        self.recentActions = collections.deque(10*[None], 10)
 
         # Other stuff.
         self.velocities = np.zeros(3)
@@ -305,9 +305,13 @@ class AuvEnv(gym.Env):
             # -0.05*np.sum(action**2.),
 
             # --- inspider by Woo et al. (2019) ---
-            np.exp(-5*np.linalg.norm(perr)),
-            np.exp(-0.1*np.abs(herr/np.pi*180)) if np.abs(herr) < np.pi/2 else -np.exp(-0.1*(180. - np.abs(herr/np.pi*180))),
+            np.exp(-5.*np.linalg.norm(perr)),
+            np.exp(-0.1*np.abs(herr/np.pi*180.)) if np.abs(herr) < np.pi/2. else -np.exp(-0.1*(180. - np.abs(herr/np.pi*180.))),
             np.exp(-0.6*rmsAc),
+
+            # Additional term which encourages as little actuation as possible.
+            # np.exp(-5.*np.sum(np.abs(action))/len(action)),
+            -0.1*np.sum(action**2.)/len(action),
 
             # ---
             # Additional bonuses or penalties.
@@ -326,14 +330,14 @@ class AuvEnv(gym.Env):
         self.timeHistory.append(dict(zip(
             ["step", "time", "reward", "x", "y", "psi", "x_d", "y_d", "psi_d"] \
                 +["Fx", "Fy", "N", "Fx_set", "Fy_set", "N_set"] \
-                +["u", "v", "r", "u_current", "v_current"]\
+                +["u", "v", "r", "u_current", "v_current", "rmsAc"] \
                 +["r{:d}".format(i) for i in range(len(rewardTerms))] \
                 +["a{:d}".format(i) for i in range(len(action))] \
                 +["s{:d}".format(i) for i in range(len(self.state))],
             np.concatenate([
                 [self.iStep, self.time, reward], self.position, [self.heading], self.positionTarget, [self.headingTarget],
                 Fhydro, Fset, [Nset],
-                velocities, velCurrent,
+                velocities, velCurrent, [rmsAc],
                 rewardTerms, action, self.state])
             )))
         if done:
