@@ -182,9 +182,13 @@ def plotEpisode(env_to_plot, title=""):
     return fig, ax
 
 
-def animateEpisode(env_plot, caseName):
+def animateEpisode(env_plot, caseName, flipX=False):
 
     # Plot contours (and animate)
+    if flipX:
+        xm = -1.
+    else:
+        xm = 1.
 
     # Set up the plot
     fig, ax = plt.subplots(figsize=(10, 9))
@@ -209,23 +213,23 @@ def animateEpisode(env_plot, caseName):
     # Plot constant elements
     lns = []
 
-    lns += ax.plot([env_plot.positionTarget[i0]],
+    lns += ax.plot([env_plot.positionTarget[i0]*xm],
                     [env_plot.positionTarget[i1]],
                     "go--", lw=2, ms=8, mew=2, mec="g", mfc="None", label="$Waypoint$")
 
     xyHeading = 0.5*np.cos(env_plot.headingTarget), 0.5*np.sin(env_plot.headingTarget)
-    lns += ax.plot([0, xyHeading[i0]], [0, xyHeading[i1]], "g-", lw=4, alpha=0.5, label="Target heading")
+    lns += ax.plot([0, xyHeading[i0]*xm], [0, xyHeading[i1]], "g-", lw=4, alpha=0.5, label="Target heading")
 
-    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[0, i0], env_plot.timeHistory[["x", "y"]].values[0, i1],
+    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[0, i0]*xm, env_plot.timeHistory[["x", "y"]].values[0, i1],
             "bs", ms=11, mew=2, mec="b", mfc="None", label="$Start$")
 
-    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[-1, i0], env_plot.timeHistory[["x", "y"]].values[-1, i1],
+    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[-1, i0]*xm, env_plot.timeHistory[["x", "y"]].values[-1, i1],
             "bd", ms=11, mew=2, mec="b", mfc="None", label="$End$")
 
     # Plot the flow field.
     iField = 0
     levels = np.linspace(0.75, 1.25, 11)
-    cs = ax.contourf(env_plot.flow.coords[:, :, 0], env_plot.flow.coords[:, :, 1],
+    cs = ax.contourf(env_plot.flow.coords[:, :, 0]*xm, env_plot.flow.coords[:, :, 1],
                      env_plot.flow.interpField(env_plot.timeHistory.loc[0, "time"])[:, :, iField],
                      levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
 
@@ -234,7 +238,7 @@ def animateEpisode(env_plot, caseName):
     cbar = fig.colorbar(cs, cax=position, orientation="vertical")
     cbar.set_label("u [m/s]")
     plt.subplots_adjust(right=0.8)
-    auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[0],
+    auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[0]*xm,
                                  env_plot.timeHistory["y"].values[0],
                                  env_plot.timeHistory["psi"].values[0],
                                  markerSize=0.5, arrowSize=1, scale=1, alpha=0.8)
@@ -245,9 +249,9 @@ def animateEpisode(env_plot, caseName):
     maxUc = np.linalg.norm(env_plot.timeHistory[["u_current", "v_current"]].values, axis=1).max()
 
     arr_v = ax.arrow(
-        env_plot.timeHistory[["x", "y"]].values[0, i0],
+        env_plot.timeHistory[["x", "y"]].values[0, i0]*xm,
         env_plot.timeHistory[["x", "y"]].values[0, i1],
-        env_plot.timeHistory[["u", "v"]].values[0, i0]*arrLen/maxU,
+        env_plot.timeHistory[["u", "v"]].values[0, i0]*arrLen/maxU*xm,
         env_plot.timeHistory[["u", "v"]].values[0, i1]*arrLen/maxU,
         length_includes_head=True, zorder=100,
         width=0.01, edgecolor="None", facecolor="red")
@@ -256,9 +260,9 @@ def animateEpisode(env_plot, caseName):
     arr_v_dummy.remove()
 
     arr_c = ax.arrow(
-        env_plot.timeHistory[["x", "y"]].values[0, i0],
+        env_plot.timeHistory[["x", "y"]].values[0, i0]*xm,
         env_plot.timeHistory[["x", "y"]].values[0, i1],
-        env_plot.timeHistory[["u_current", "v_current"]].values[0, i0]*arrLen/maxUc,
+        env_plot.timeHistory[["u_current", "v_current"]].values[0, i0]*arrLen/maxUc*xm,
         env_plot.timeHistory[["u_current", "v_current"]].values[0, i1]*arrLen/maxUc,
         length_includes_head=True, zorder=100,
         width=0.01, edgecolor="None", facecolor="magenta")
@@ -267,7 +271,7 @@ def animateEpisode(env_plot, caseName):
     arr_c_dummy.remove()
 
     # Plot the entire trajectory
-    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[:, i0], env_plot.timeHistory[["x", "y"]].values[:, i1], "k-",
+    lns += ax.plot(env_plot.timeHistory[["x", "y"]].values[:, i0]*xm, env_plot.timeHistory[["x", "y"]].values[:, i1], "k-",
         mec="k", lw=2, mew=2, ms=9, mfc="None", label="$Trajectory$")
 
     # Add the legend.
@@ -288,24 +292,24 @@ def animateEpisode(env_plot, caseName):
                 c.remove()
             for c in self.auvObjects:
                 c.remove()
-            self.cs = ax.contourf(env_plot.flow.coords[:, :, 0], env_plot.flow.coords[:, :, 1],
+            self.cs = ax.contourf(env_plot.flow.coords[:, :, 0]*xm, env_plot.flow.coords[:, :, 1],
                              env_plot.flow.interpField(env_plot.timeHistory.loc[i, "time"])[:, :, iField],
                              levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
 
-            self.auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[i],
+            self.auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[i]*xm,
                                          env_plot.timeHistory["y"].values[i],
                                          env_plot.timeHistory["psi"].values[i],
                                          markerSize=0.5, arrowSize=1, scale=1, alpha=0.8)
 
             self.arr_v.set_data(
-                x=env_plot.timeHistory[["x", "y"]].values[i, i0],
+                x=env_plot.timeHistory[["x", "y"]].values[i, i0]*xm,
                 y=env_plot.timeHistory[["x", "y"]].values[i, i1],
-                dx=env_plot.timeHistory[["u", "v"]].values[i, i0]*arrLen/maxU,
+                dx=env_plot.timeHistory[["u", "v"]].values[i, i0]*arrLen/maxU*xm,
                 dy=env_plot.timeHistory[["u", "v"]].values[i, i1]*arrLen/maxU)
             self.arr_c.set_data(
-                x=env_plot.timeHistory[["x", "y"]].values[i, i0],
+                x=env_plot.timeHistory[["x", "y"]].values[i, i0]*xm,
                 y=env_plot.timeHistory[["x", "y"]].values[i, i1],
-                dx=env_plot.timeHistory[["u_current", "v_current"]].values[i, i0]*arrLen/maxUc,
+                dx=env_plot.timeHistory[["u_current", "v_current"]].values[i, i0]*arrLen/maxUc*xm,
                 dy=env_plot.timeHistory[["u_current", "v_current"]].values[i, i1]*arrLen/maxU)
 
             return self.cs, self.auvObjects

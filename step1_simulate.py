@@ -74,10 +74,11 @@ if __name__ == "__main__":
         pdController, env_eval_pd, num_episodes=100)
 
     # Evaluate once with fixed initial conditions.
+    print("\nLike-for-like comparison")
     resources.evaluate_agent(model, env_eval, num_episodes=1,
-                             init=[[0.5, 0.5], 0.4, 0.95])
+                             init=[[-0.5, -0.5], 0.785, 1.57])
     resources.evaluate_agent(pdController, env_eval_pd, num_episodes=1,
-                             init=[[0.5, 0.5], 0.4, 0.95])
+                             init=[[-0.5, -0.5], 0.785, 1.57])
     resources.plotEpisode(env_eval, "RL control fixed init")
     fig, ax = resources.plotEpisode(env_eval_pd, "Simple control fixed init")
 
@@ -100,5 +101,5 @@ if __name__ == "__main__":
 
     # Animate. Takes a long time.
     if makeAnimation:
-        resources.animateEpisode(env_eval, "RL_control")
-        resources.animateEpisode(env_eval_pd, "naive_control")
+        resources.animateEpisode(env_eval, "RL_control", flipX=True)
+        resources.animateEpisode(env_eval_pd, "naive_control", flipX=True)
