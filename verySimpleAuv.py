@@ -163,7 +163,7 @@ class AuvEnv(gym.Env):
 
         return newState
 
-    def reset(self, keepTimeHistory=False, applyNoise=True):
+    def reset(self, keepTimeHistory=False, applyNoise=True, fixedInitialValues=None):
         if self.seed is not None:
             self._np_random, self.seed = seeding.np_random(self.seed)
 
@@ -179,12 +179,17 @@ class AuvEnv(gym.Env):
                 self.YvMult, self.NrMult, self.XactMult, self.YactMult, self.NactMult = np.ones(11)
 
         # Set initial and target parameters.
-        self.position = (np.random.rand(2)-0.5) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]]
+        if fixedInitialValues is None:
+            self.position = (np.random.rand(2)-0.5) * 0.5 * [self.xMinMax[1]-self.xMinMax[0], self.yMinMax[1]-self.yMinMax[0]]
+            self.heading = np.random.rand()*2.*np.pi
+            self.headingTarget = np.random.rand()*2.*np.pi
+        else:
+            self.position = fixedInitialValues[0]
+            self.heading = fixedInitialValues[1]
+            self.headingTarget = fixedInitialValues[2]
         self.positionStart = self.position.copy()
         self.positionTarget = np.zeros(2)
-        self.heading = np.random.rand()*2.*np.pi
         self.headingStart = self.heading
-        self.headingTarget = np.random.rand()*2.*np.pi
 
         # random initial time in the first 25% of flow data.
         self.flowDataTimeOffset = np.random.rand()*self.flow.time[self.flow.time.shape[0]//4]

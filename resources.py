@@ -19,7 +19,7 @@ orientation = "right_up_anticlockwise"
 
 
 def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=True,
-                   num_last_for_reward=None, render=False):
+                   num_last_for_reward=None, render=False, init=None):
     """
     Evaluate a RL agent
     :param model: (BaseRLModel object) the RL Agent
@@ -33,7 +33,7 @@ def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=Tru
     for i in range(num_episodes):
         episode_rewards = []
         done = False
-        obs = env.reset()
+        obs = env.reset(fixedInitialValues=init)
         if num_steps is None:
             num_steps = 1000000
         for i in range(num_steps):

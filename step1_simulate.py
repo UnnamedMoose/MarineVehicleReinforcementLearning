@@ -65,7 +65,6 @@ if __name__ == "__main__":
     print("\nRL agent")
     mean_reward, allRewards = resources.evaluate_agent(
         model, env_eval, num_episodes=100)
-    resources.plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
@@ -73,7 +72,14 @@ if __name__ == "__main__":
     pdController = auv.PDController(env_eval_pd.dt)
     mean_reward_pd, allRewards_pd = resources.evaluate_agent(
         pdController, env_eval_pd, num_episodes=100)
-    fig, ax = resources.plotEpisode(env_eval_pd, "Simple control")
+
+    # Evaluate once with fixed initial conditions.
+    resources.evaluate_agent(model, env_eval, num_episodes=1,
+                             init=[[0.5, 0.5], 0.4, 0.95])
+    resources.evaluate_agent(pdController, env_eval_pd, num_episodes=1,
+                             init=[[0.5, 0.5], 0.4, 0.95])
+    resources.plotEpisode(env_eval, "RL control fixed init")
+    fig, ax = resources.plotEpisode(env_eval_pd, "Simple control fixed init")
 
     # Compare stats.
     fig, ax = plt.subplots()
