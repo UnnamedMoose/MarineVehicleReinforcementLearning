@@ -28,23 +28,18 @@ if __name__ == "__main__":
 
     # ---
     # Controls
-    makeAnimation = False
+    makeAnimation = True
 
-    # state=[perr/0.2, herr/45, (herr-herr_o)/2]
-    # reward=[exp(-5perr), exp(-0.1herr/180), 0.25exp(0.4rms)]
-    # modelName = "SAC_try5"
-
-    # state=[perr/0.2, herr/45, (herr-herr_o)/2, (perr-perr_o)/0.05, velocities/[0.2, 0.2, 30]]
-    # reward=[exp(-5perr), exp(-0.1herr/180), exp(-0.6rms)]
-    # mean reward ~590, about the same as simple control.
-    # modelName = "SAC_try6"
-
-    # Additional penalty for minimising actuation, 3*128 layers
     modelName = "SAC_try7"
+
+    env_kwargs = {
+        "currentVelScale": 1.,
+        "currentTurbScale": 2.,
+    }
     # ---
 
     # Create the environment and load the best model to-date.
-    env_eval = auv.AuvEnv()
+    env_eval = auv.AuvEnv(**env_kwargs)
     model = stable_baselines3.SAC.load("./bestModel/{}".format(modelName))
 
     # Load the hyperparamters as well for demonstration purposes.
@@ -68,7 +63,7 @@ if __name__ == "__main__":
 
     # Dumb agent.
     print("\nSimple control")
-    env_eval_pd = auv.AuvEnv()
+    env_eval_pd = auv.AuvEnv(**env_kwargs)
     pdController = auv.PDController(env_eval_pd.dt)
     mean_reward_pd, allRewards_pd = resources.evaluate_agent(
         pdController, env_eval_pd, num_episodes=100)
@@ -101,5 +96,7 @@ if __name__ == "__main__":
 
     # Animate. Takes a long time.
     if makeAnimation:
-        resources.animateEpisode(env_eval, "RL_control", flipX=True)
-        resources.animateEpisode(env_eval_pd, "naive_control", flipX=True)
+        resources.animateEpisode(env_eval, "RL_control",
+                                 flipX=True, Uinf=env_kwargs["currentVelScale"])
+        resources.animateEpisode(env_eval_pd, "naive_control",
+                                 flipX=True, Uinf=env_kwargs["currentVelScale"])

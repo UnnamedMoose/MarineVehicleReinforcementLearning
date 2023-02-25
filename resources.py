@@ -182,7 +182,7 @@ def plotEpisode(env_to_plot, title=""):
     return fig, ax
 
 
-def animateEpisode(env_plot, caseName, flipX=False):
+def animateEpisode(env_plot, caseName, flipX=False, Uinf=1.):
 
     # Plot contours (and animate)
     if flipX:
@@ -228,9 +228,9 @@ def animateEpisode(env_plot, caseName, flipX=False):
 
     # Plot the flow field.
     iField = 0
-    levels = np.linspace(0.75, 1.25, 11)
+    levels = np.sort(np.linspace(0.75*Uinf*xm, 1.25*Uinf*xm, 11))
     cs = ax.contourf(env_plot.flow.coords[:, :, 0]*xm, env_plot.flow.coords[:, :, 1],
-                     env_plot.flow.interpField(env_plot.timeHistory.loc[0, "time"])[:, :, iField],
+                     env_plot.flow.interpField(env_plot.timeHistory.loc[0, "time"])[:, :, iField]*xm,
                      levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
 
     # Plot the AUV outline.
@@ -293,7 +293,7 @@ def animateEpisode(env_plot, caseName, flipX=False):
             for c in self.auvObjects:
                 c.remove()
             self.cs = ax.contourf(env_plot.flow.coords[:, :, 0]*xm, env_plot.flow.coords[:, :, 1],
-                             env_plot.flow.interpField(env_plot.timeHistory.loc[i, "time"])[:, :, iField],
+                             env_plot.flow.interpField(env_plot.timeHistory.loc[i, "time"])[:, :, iField]*xm,
                              levels=levels, extend="both", cmap=plt.cm.PuOr_r, zorder=-100, alpha=0.5)
 
             self.auvObjects = plot_horizontal(ax, env_plot.timeHistory["x"].values[i]*xm,
