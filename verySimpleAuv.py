@@ -28,7 +28,9 @@ class PDController(object):
         self.dt = dt
         self.oldObs = None
 
-    def predict(self, obs):
+    def predict(self, obs, deterministic=True):
+        # NOTE deterministic is a dummy kwarg needed to make this function look
+        # like a stable baselines equivalent
         states = np.zeros(len(self.P))
 
         x = obs[:3]

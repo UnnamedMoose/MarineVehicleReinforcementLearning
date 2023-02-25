@@ -18,8 +18,8 @@ import matplotlib.animation as animation
 orientation = "right_up_anticlockwise"
 
 
-def evaluate_agent(model, env, num_episodes=1, num_steps=None,
-                    num_last_for_reward=None, render=False):
+def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=True,
+                   num_last_for_reward=None, render=False):
     """
     Evaluate a RL agent
     :param model: (BaseRLModel object) the RL Agent
@@ -38,7 +38,7 @@ def evaluate_agent(model, env, num_episodes=1, num_steps=None,
             num_steps = 1000000
         for i in range(num_steps):
             # _states are only useful when using LSTM policies
-            action, _states = model.predict(obs)
+            action, _states = model.predict(obs, deterministic=deterministic)
             # here, action, rewards and dones are arrays
             # because we are using vectorized env
             obs, reward, done, info = env.step(action)

@@ -63,14 +63,16 @@ if __name__ == "__main__":
 
     # Evaluate for a large number of episodes to test robustness.
     print("\nRL agent")
-    mean_reward, allRewards = resources.evaluate_agent(model, env_eval, num_episodes=100)
+    mean_reward, allRewards = resources.evaluate_agent(
+        model, env_eval, num_episodes=100)
     resources.plotEpisode(env_eval, "RL control")
 
     # Dumb agent.
     print("\nSimple control")
     env_eval_pd = auv.AuvEnv()
     pdController = auv.PDController(env_eval_pd.dt)
-    mean_reward_pd, allRewards_pd = resources.evaluate_agent(pdController, env_eval_pd, num_episodes=100)
+    mean_reward_pd, allRewards_pd = resources.evaluate_agent(
+        pdController, env_eval_pd, num_episodes=100)
     fig, ax = resources.plotEpisode(env_eval_pd, "Simple control")
 
     # Compare stats.
