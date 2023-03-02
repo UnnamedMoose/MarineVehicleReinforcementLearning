@@ -66,7 +66,7 @@ if __name__ == "__main__":
     env_eval_pd = auv.AuvEnv(**env_kwargs)
     pdController = auv.PDController(env_eval_pd.dt)
     mean_reward_pd, allRewards_pd = resources.evaluate_agent(
-        pdController, env_eval_pd, num_episodes=100)
+        pdController, env_eval_pd, num_episodes=100, saveDir="testEpisodes")
 
     # Evaluate once with fixed initial conditions.
     print("\nLike-for-like comparison")

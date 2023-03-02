@@ -9,6 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import re
+import os
 import matplotlib.animation as animation
 
 # Configure the coordinate system. Either use directions like they would appear
@@ -19,7 +20,7 @@ orientation = "right_up_anticlockwise"
 
 
 def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=True,
-                   num_last_for_reward=None, render=False, init=None):
+                   num_last_for_reward=None, render=False, init=None, saveDir=None):
     """
     Evaluate a RL agent
     :param model: (BaseRLModel object) the RL Agent
@@ -28,12 +29,18 @@ def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=Tru
     """
     frames = []
 
+    keepHistory = False
+    if saveDir is not None:
+        os.makedirs(saveDir, exist_ok=True)
+        keepHistory = True
+
     # This function will only work for a single Environment
     all_episode_rewards = []
-    for i in range(num_episodes):
+    for iEp in range(num_episodes):
         episode_rewards = []
         done = False
-        obs = env.reset(fixedInitialValues=init)
+
+        obs = env.reset(fixedInitialValues=init, keepTimeHistory=keepHistory)
         if num_steps is None:
             num_steps = 1000000
         for i in range(num_steps):
@@ -46,6 +53,9 @@ def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=Tru
             if render:
                 frames.append(env.render(mode="rgb_array"))
             if done:
+                if saveDir is not None:
+                    env.timeHistory.to_csv(os.path.join(
+                        saveDir, "ep_{:d}.csv".format(iEp)), index=False)
                 break
 
         if num_last_for_reward is None:
