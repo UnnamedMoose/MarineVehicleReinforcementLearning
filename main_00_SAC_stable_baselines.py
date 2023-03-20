@@ -35,13 +35,7 @@ if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
-    # TODO compare weights somehow to see if some common features appear?
-    # model.actor.latent_pi[0].weight.shape
-    # model.critic.qf0[0].weight.shape
-    # model.actor.latent_pi
-    # model.actor.mu
-
-    modelName = "SAC_try7"
+    agentName = "SAC_try7"
 
     # Top-level switches
     do_training = False
@@ -49,18 +43,18 @@ if __name__ == "__main__":
 
     # --- Training parameters ---
 
-    modelToRestart = None
-    # modelToRestart = "SAC_try6"
+    agentToRestart = None
+    # agentToRestart = "SAC_try6"
 
     # No. parallel processes.
     nProc = 16
 
     # Do everything N times to rule out random successes and failures.
-    nModels = 1
+    nAgents = 1
 
     nTrainingSteps = 3_000_000
 
-    model_kwargs = {
+    agent_kwargs = {
         'learning_rate': 2e-3,
         'gamma': 0.95,
         'verbose': 1,
@@ -104,11 +98,11 @@ if __name__ == "__main__":
 
         # Train several times to make sure the agent doesn't just get lucky.
         convergenceData = []
-        models = []
-        for iModel in range(nModels):
+        agents = []
+        for iAgent in range(nAgents):
             # Set up constants etc.
-            saveFile = "./modelData/{}_{:d}".format(modelName, iModel)
-            logDir = "./modelData/{}_{:d}_logs".format(modelName, iModel)
+            saveFile = "./agentData/{}_{:d}".format(agentName, iAgent)
+            logDir = "./agentData/{}_{:d}_logs".format(agentName, iAgent)
             os.makedirs(logDir, exist_ok=True)
 
             # Create the environments.
@@ -116,91 +110,36 @@ if __name__ == "__main__":
             env = SubprocVecEnv([auv.make_env(i, env_kwargs=env_kwargs) for i in range(nProc)])
             env = VecMonitor(env, logDir)
 
-            # Create the model using stable baselines.
-            if modelToRestart is None:
-                model = stable_baselines3.SAC(
-                    "MlpPolicy", env, policy_kwargs=policy_kwargs, **model_kwargs)
+            # Create the agent using stable baselines.
+            if agentToRestart is None:
+                agent = stable_baselines3.SAC(
+                    "MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
             else:
-                model = stable_baselines3.SAC.load("./bestModel/{}".format(modelToRestart))
-                model.set_env(env)
+                agent = stable_baselines3.SAC.load("./bestAgent/{}".format(agentToRestart))
+                agent.set_env(env)
 
             # Train the agent for N steps
-            starttime = datetime.datetime.now()
-            print("\nTraining of model", iModel, "started at", str(starttime))
-            model.learn(total_timesteps=nTrainingSteps, log_interval=100000000, progress_bar=True)
-            endtime = datetime.datetime.now()
-            trainingTime = (endtime-starttime).total_seconds()
-            print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
-
-            # Save.
-            model.save(saveFile)
-
-            # Move the monitor to make it easier to find.
-            shutil.copyfile(os.path.join(logDir, "monitor.csv"), saveFile+"_monitor.csv")
-
-            # Retain convergence info and model.
-            convergenceData.append(pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1))
-            models.append(model)
-
-            print("Final reward {:.2f}".format(convergenceData[-1].rolling(200).mean()["r"].values[-1]))
+            convergenceData.append(resources.trainAgent(agent, nTrainingSteps, saveFile, logDir))
+            agents.append(agent)
 
             # Evaluate
             env_eval = auv.AuvEnv()
-            resources.evaluate_agent(model, env_eval, num_episodes=100)
+            resources.evaluate_agent(agent, env_eval, num_episodes=100)
 
         # Save metadata in human-readable format.
-        with open("./modelData/{}_hyperparameters.yaml".format(modelName), "w") as outf:
-            data = {
-                "modelName": modelName,
-                "model_kwargs": model_kwargs.copy(),
-                "policy_kwargs": policy_kwargs.copy(),
-                "env_kwargs": env_kwargs.copy(),
-                "nTrainingSteps": nTrainingSteps,
-            }
-            # Change noise to human-readable format.
-            try:
-                data["model_kwargs"]["action_noise"] = {
-                    "mu": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._mu],
-                    "sigma": [float(v) for v in data["model_kwargs"]["action_noise"].noises[0]._sigma],
-                    }
-            except KeyError:
-                pass
-            # Convert types because yaml is yaml.
-            data["policy_kwargs"]["activation_fn"] = str(policy_kwargs["activation_fn"])
-            data["model_kwargs"]["train_freq"] = list(model_kwargs["train_freq"])
-            # Write.
-            yaml.dump(data, outf, default_flow_style=False)
+        resources.saveHyperparameteres(
+            agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps)
 
-        # Plot convergence of each model.
-        fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 7))
-        plt.subplots_adjust(top=0.91, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
-        colours = plt.cm.plasma(np.linspace(0, 0.9, nModels))
-        lns = []
-        iBest = 0
-        rewardBest = -1e6
-        for iModel, convergence in enumerate(convergenceData):
-            rol = convergence.rolling(200).mean()
-            if rol["r"].values[-1] > rewardBest:
-                iBest = iModel
-                rewardBest = rol["r"].values[-1]
-            for i, f in enumerate(["r", "l"]):
-                ax[i].set_xlabel("Episode")
-                ax[i].set_ylabel(f.replace("r", "Reward").replace("l", "Episode length"))
-                ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.5, c=colours[iModel], zorder=-100)
-                ln, = ax[i].plot(convergence.index, rol[f], "-", c=colours[iModel], lw=2)
-                if i == 0:
-                    lns.append(ln)
-        ax[0].set_ylim((max(ax[0].get_ylim()[0], -1500), ax[0].get_ylim()[1]))
-        fig.legend(lns, ["M{:d}".format(iModel) for iModel in range(nModels)],
-                   loc="upper center", ncol=10)
-        plt.savefig("./modelData/{}_convergence.png".format(modelName), dpi=200, bbox_inches="tight")
+        # Plot convergence of each agent.
+        iBest, _ = resources.plotTraining(
+            convergenceData, saveAs="./agentData/{}_convergence.png".format(agentName))
 
-        # Pick the best model.
-        model = models[iBest]
+        # Pick the best agent.
+        agent = agents[iBest]
 
         # Trained agent.
         print("\nAfter training")
-        mean_reward,_ = resources.evaluate_agent(model, env_eval)
+        mean_reward,_ = resources.evaluate_agent(agent, env_eval)
         resources.plotEpisode(env_eval, "RL control")
 
         # Dumb agent.
@@ -215,18 +154,18 @@ if __name__ == "__main__":
 
 # %% Evaluation
     if do_evaluation:
-        # Create the environment and load the best model to-date.
+        # Create the environment and load the best agent to-date.
         env_eval = auv.AuvEnv(**env_kwargs_evaluation)
-        model = stable_baselines3.SAC.load("./bestModel/{}".format(modelName))
+        agent = stable_baselines3.SAC.load("./bestAgent/{}".format(agentName))
 
         # Load the hyperparamters as well for demonstration purposes.
-        with open("./bestModel/{}_hyperparameters.yaml".format(modelName), "r") as outf:
+        with open("./bestAgent/{}_hyperparameters.yaml".format(agentName), "r") as outf:
             hyperparameters = yaml.safe_load(outf)
 
-        # Load the convergence history of the model for demonstration purposes.
-        convergence = pandas.read_csv("./bestModel/{}_monitor.csv".format(modelName), skiprows=1)
+        # Load the convergence history of the agent for demonstration purposes.
+        convergence = pandas.read_csv("./bestAgent/{}_monitor.csv".format(agentName), skiprows=1)
 
-        # Plot model convergence history.
+        # Plot agent convergence history.
         fig, ax = plt.subplots()
         ax.set_xlabel("Episode")
         ax.set_ylabel("Reward")
@@ -236,7 +175,7 @@ if __name__ == "__main__":
         # Evaluate for a large number of episodes to test robustness.
         print("\nRL agent")
         mean_reward, allRewards = resources.evaluate_agent(
-            model, env_eval, num_episodes=100)
+            agent, env_eval, num_episodes=100)
 
         # Dumb agent.
         print("\nSimple control")
@@ -247,7 +186,7 @@ if __name__ == "__main__":
 
         # Evaluate once with fixed initial conditions.
         print("\nLike-for-like comparison")
-        resources.evaluate_agent(model, env_eval, num_episodes=1,
+        resources.evaluate_agent(agent, env_eval, num_episodes=1,
                                  init=[[-0.5, -0.5], 0.785, 1.57])
         resources.evaluate_agent(pdController, env_eval_pd, num_episodes=1,
                                  init=[[-0.5, -0.5], 0.785, 1.57])

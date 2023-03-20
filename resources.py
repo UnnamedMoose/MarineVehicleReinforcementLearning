@@ -11,6 +11,10 @@ import numpy as np
 import re
 import os
 import matplotlib.animation as animation
+import datetime
+import shutil
+import pandas
+import yaml
 
 # Configure the coordinate system. Either use directions like they would appear
 # on a map (consistent with manoeuvring theory) or like they appear in traditional
@@ -19,11 +23,11 @@ import matplotlib.animation as animation
 orientation = "right_up_anticlockwise"
 
 
-def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=True,
+def evaluate_agent(agent, env, num_episodes=1, num_steps=None, deterministic=True,
                    num_last_for_reward=None, render=False, init=None, saveDir=None):
     """
     Evaluate a RL agent
-    :param model: (BaseRLModel object) the RL Agent
+    :param agent: (BaseRLModel object) the RL Agent
     :param num_episodes: (int) number of episodes to evaluate it
     :return: (float) Mean reward for the last num_episodes
     """
@@ -45,7 +49,7 @@ def evaluate_agent(model, env, num_episodes=1, num_steps=None, deterministic=Tru
             num_steps = 1000000
         for i in range(num_steps):
             # _states are only useful when using LSTM policies
-            action, _states = model.predict(obs, deterministic=deterministic)
+            action, _states = agent.predict(obs, deterministic=deterministic)
             # here, action, rewards and dones are arrays
             # because we are using vectorized env
             obs, reward, done, info = env.step(action)
@@ -378,3 +382,84 @@ def plotDetail(envs_to_plot, labels=None, title=""):
                 ax.plot(envs_to_plot[iEnv].timeHistory[f], "-", lw=2,
                         c=caseColours[iEnv], label=labels[iEnv])
             ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
+
+# %% Functions for training.
+
+def trainAgent(agent, nTrainingSteps, saveFile, logDir):
+
+    # Train the agent for N steps
+    starttime = datetime.datetime.now()
+    print("\nTraining started at", str(starttime))
+    agent.learn(total_timesteps=nTrainingSteps, log_interval=100000000, progress_bar=True)
+    endtime = datetime.datetime.now()
+    trainingTime = (endtime-starttime).total_seconds()
+    print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
+
+    # Save.
+    agent.save(saveFile)
+
+    # Move the monitor to make it easier to find.
+    shutil.copyfile(os.path.join(logDir, "monitor.csv"), saveFile+"_monitor.csv")
+
+    # Retain convergence info and agent.
+    convergenceData = pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1)
+
+    print("Final reward {:.2f}".format(convergenceData.rolling(200).mean()["r"].values[-1]))
+
+    return convergenceData
+
+def plotTraining(convHistories, saveAs=None):
+    try:
+        convHistories[0]
+    except TypeError:
+        convHistories = [convHistories]
+    nAgents = len(convHistories)
+
+    fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 7))
+    plt.subplots_adjust(top=0.91, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
+    colours = plt.cm.plasma(np.linspace(0, 0.9, nAgents))
+    lns = []
+    iBest = 0
+    rewardBest = -1e6
+    for iAgent, convergence in enumerate(convHistories):
+        rol = convergence.rolling(200).mean()
+        if rol["r"].values[-1] > rewardBest:
+            iBest = iAgent
+            rewardBest = rol["r"].values[-1]
+        for i, f in enumerate(["r", "l"]):
+            ax[i].set_xlabel("Episode")
+            ax[i].set_ylabel(f.replace("r", "Reward").replace("l", "Episode length"))
+            ax[i].plot(convergence.index, convergence[f], ".", ms=4, alpha=0.5, c=colours[iAgent], zorder=-100)
+            ln, = ax[i].plot(convergence.index, rol[f], "-", c=colours[iAgent], lw=2)
+            if i == 0:
+                lns.append(ln)
+    ax[0].set_ylim((max(ax[0].get_ylim()[0], -1500), ax[0].get_ylim()[1]))
+    fig.legend(lns, ["M{:d}".format(iAgent) for iAgent in range(nAgents)],
+               loc="upper center", ncol=10)
+    if saveAs is not None:
+        plt.savefig(saveAs, dpi=200, bbox_inches="tight")
+
+    return iBest, fig, ax
+
+def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps):
+    with open("./agentData/{}_hyperparameters.yaml".format(agentName), "w") as outf:
+        data = {
+            "agentName": agentName,
+            "agent_kwargs": agent_kwargs.copy(),
+            "policy_kwargs": policy_kwargs.copy(),
+            "env_kwargs": env_kwargs.copy(),
+            "nTrainingSteps": nTrainingSteps,
+        }
+        # Change noise to human-readable format.
+        try:
+            data["agent_kwargs"]["action_noise"] = {
+                "mu": [float(v) for v in data["agent_kwargs"]["action_noise"].noises[0]._mu],
+                "sigma": [float(v) for v in data["agent_kwargs"]["action_noise"].noises[0]._sigma],
+                }
+        except KeyError:
+            pass
+        # Convert types because yaml is yaml.
+        data["policy_kwargs"]["activation_fn"] = str(policy_kwargs["activation_fn"])
+        data["agent_kwargs"]["train_freq"] = list(agent_kwargs["train_freq"])
+        # Write.
+        yaml.dump(data, outf, default_flow_style=False)
