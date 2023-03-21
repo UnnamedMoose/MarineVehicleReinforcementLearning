@@ -33,13 +33,13 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
-    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     agentName = "SAC_try7"
 
     # Top-level switches
-    do_training = False
-    do_evaluation = True
+    do_training = True
+    do_evaluation = False
 
     # --- Training parameters ---
 
@@ -47,10 +47,10 @@ if __name__ == "__main__":
     # agentToRestart = "SAC_try6"
 
     # No. parallel processes.
-    nProc = 16
+    nProc = 8
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 1
+    nAgents = 3
 
     nTrainingSteps = 3_000_000
 
@@ -91,6 +91,8 @@ if __name__ == "__main__":
     env_kwargs_evaluation = {
         "currentVelScale": 1.,
         "currentTurbScale": 2.,
+        "noiseMagActuation": 0.,
+        "noiseMagCoeffs": 0.,
     }
 
 # %% Training.
@@ -98,17 +100,16 @@ if __name__ == "__main__":
 
         # Train several times to make sure the agent doesn't just get lucky.
         convergenceData = []
+        trainingTimeAvg = 0
         agents = []
         for iAgent in range(nAgents):
             # Set up constants etc.
             saveFile = "./agentData/{}_{:d}".format(agentName, iAgent)
-            logDir = "./agentData/{}_{:d}_logs".format(agentName, iAgent)
-            os.makedirs(logDir, exist_ok=True)
 
             # Create the environments.
             env_eval = auv.AuvEnv()
             env = SubprocVecEnv([auv.make_env(i, env_kwargs=env_kwargs) for i in range(nProc)])
-            env = VecMonitor(env, logDir)
+            env = VecMonitor(env, saveFile)
 
             # Create the agent using stable baselines.
             if agentToRestart is None:
@@ -119,7 +120,9 @@ if __name__ == "__main__":
                 agent.set_env(env)
 
             # Train the agent for N steps
-            convergenceData.append(resources.trainAgent(agent, nTrainingSteps, saveFile, logDir))
+            conv, trainingTime = resources.trainAgent(agent, nTrainingSteps, saveFile)
+            convergenceData.append(conv)
+            trainingTimeAvg += trainingTime/nAgents
             agents.append(agent)
 
             # Evaluate
@@ -128,10 +131,10 @@ if __name__ == "__main__":
 
         # Save metadata in human-readable format.
         resources.saveHyperparameteres(
-            agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps)
+            agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTimeAvg, nProc)
 
         # Plot convergence of each agent.
-        iBest, _ = resources.plotTraining(
+        iBest, fig, ax = resources.plotTraining(
             convergenceData, saveAs="./agentData/{}_convergence.png".format(agentName))
 
         # Pick the best agent.

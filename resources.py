@@ -385,7 +385,9 @@ def plotDetail(envs_to_plot, labels=None, title=""):
 
 # %% Functions for training.
 
-def trainAgent(agent, nTrainingSteps, saveFile, logDir):
+def trainAgent(agent, nTrainingSteps, saveFile):
+
+    # os.mkdirs(logDir, exist_ok=True)
 
     # Train the agent for N steps
     starttime = datetime.datetime.now()
@@ -398,15 +400,12 @@ def trainAgent(agent, nTrainingSteps, saveFile, logDir):
     # Save.
     agent.save(saveFile)
 
-    # Move the monitor to make it easier to find.
-    shutil.copyfile(os.path.join(logDir, "monitor.csv"), saveFile+"_monitor.csv")
-
     # Retain convergence info and agent.
-    convergenceData = pandas.read_csv(os.path.join(logDir, "monitor.csv"), skiprows=1)
+    convergenceData = pandas.read_csv(saveFile+".monitor.csv", skiprows=1)
 
     print("Final reward {:.2f}".format(convergenceData.rolling(200).mean()["r"].values[-1]))
 
-    return convergenceData
+    return convergenceData, trainingTime
 
 def plotTraining(convHistories, saveAs=None):
     try:
@@ -441,7 +440,7 @@ def plotTraining(convHistories, saveAs=None):
 
     return iBest, fig, ax
 
-def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps):
+def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTime, nProc):
     with open("./agentData/{}_hyperparameters.yaml".format(agentName), "w") as outf:
         data = {
             "agentName": agentName,
@@ -449,6 +448,8 @@ def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTr
             "policy_kwargs": policy_kwargs.copy(),
             "env_kwargs": env_kwargs.copy(),
             "nTrainingSteps": nTrainingSteps,
+            "trainingTime": trainingTime,
+            "nProc": nProc,
         }
         # Change noise to human-readable format.
         try:

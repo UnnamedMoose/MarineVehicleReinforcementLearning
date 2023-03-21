@@ -15,8 +15,8 @@ import copy
 import shutil
 
 import stable_baselines3
-from stable_baselines3.common.vec_env import VecMonitor
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import VecMonitor, SubprocVecEnv
+from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
 from stable_baselines3.common.torch_layers import create_mlp
 from sklearn.model_selection import train_test_split
 import torch as th
@@ -35,9 +35,14 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 # %% Set up.
 if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
-    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-    agentName = "test_try0"
+    # Just copy the weights without doing anything. Keep the learning rate high
+    agentName = "SAC_customInit_try0_simpleCopy"
+
+    nTrainingSteps = 500_000
+    nAgents = 3
+    nProc = 16
 
     # Top-level switches
     # Generate data using PD control for pre-training of the actor net.
@@ -53,7 +58,10 @@ if __name__ == "__main__":
         'batch_size': 256,
         'learning_starts': 256,
         'train_freq': (1, "step"),
+        # "action_noise": VectorizedActionNoise(NormalActionNoise(
+        #     np.zeros(3), 0.1*np.ones(3)), nProc)
     }
+    # TODO Entropy coeff
     policy_kwargs = {
         "use_sde": False,
         "activation_fn": th.nn.GELU,
@@ -62,7 +70,6 @@ if __name__ == "__main__":
             qf=[128, 128, 128],
         )
     }
-
     # Env settings for training and evaluation
     env_kwargs = {
         "currentVelScale": 1.,
@@ -185,7 +192,7 @@ if __name__ == "__main__":
 
     # Train.
     t_start = datetime.datetime.now()
-    epochs = 100
+    epochs = 25
     loss = np.zeros(epochs)
     val_loss = np.zeros(epochs)
     for t in range(epochs):
@@ -200,7 +207,7 @@ if __name__ == "__main__":
         val_loss[t] = loss_fn(pred_test, y_test_torch)
     t_end = datetime.datetime.now()
     trainingTime = (t_end-t_start).total_seconds()
-    print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
+    print("\nTraining took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
 
     # plot the evolution of the training error
     fig, ax = plt.subplots()
@@ -229,12 +236,14 @@ if __name__ == "__main__":
     # Create env and controller instance, then evaluate.
     env_eval_nn = auv.AuvEnv(**env_kwargs_evaluation)
     nnController = NNController(env_eval_nn.dt, pretrained_actor)
+    print ("\nEvaluating direct NN control")
     mean_reward_nn, allRewards_nn = resources.evaluate_agent(
         nnController, env_eval_nn, num_episodes=1)
 
     # Evaluate using the simple controller for comparison.
     env_eval_pd = auv.AuvEnv(**env_kwargs_evaluation)
     pdController = auv.PDController(env_eval_pd.dt)
+    print ("\nEvaluating simple PD control")
     mean_reward_pd, allRewards_pd = resources.evaluate_agent(
         pdController, env_eval_pd, num_episodes=1)
 
@@ -244,22 +253,16 @@ if __name__ == "__main__":
 
 # %% Create a real SAC agent and copy the weights.
 
-    nProc = 16
-    nAgents = 3
-    agentName = "SAC_customInit_try0"
-
-    nTrainingSteps = 500_000
-
     # Train several times to make sure the agent doesn't just get lucky.
     convergenceData = []
+    trainingTimeAvg = 0
     agents = []
     for iAgent in range(nAgents):
         saveFile = "./agentData/{}_{:d}".format(agentName, iAgent)
-        logDir = "./agentData/{}_{:d}_logs".format(agentName, iAgent)
 
         # Create the training environment
         env = SubprocVecEnv([auv.make_env(i, env_kwargs=env_kwargs) for i in range(nProc)])
-        env = VecMonitor(env, logDir)
+        env = VecMonitor(env, saveFile)
 
         # Create the agent.
         sacAgent = stable_baselines3.SAC(
@@ -269,14 +272,23 @@ if __name__ == "__main__":
         # Copy the weights from the pre-trained actor.
         sacAgent.actor.latent_pi = copy.deepcopy(pretrained_actor.latent_pi)
         sacAgent.actor.mu = copy.deepcopy(pretrained_actor.mu)
+        # Add noise to enhance exploration and avoid overfitting the simple controller.
+        # with th.no_grad():
+        #     for param in sacAgent.actor.latent_pi.parameters():
+        #         param.add_(th.randn(param.size())*5e-3)
+        #     for param in sacAgent.actor.mu.parameters():
+        #         param.add_(th.randn(param.size())*5e-3)
 
         # Train the agent for N steps
-        convergenceData.append(resources.trainAgent(sacAgent, nTrainingSteps, saveFile, logDir))
+        conv, trainingTime = resources.trainAgent(sacAgent, nTrainingSteps, saveFile)
+        convergenceData.append(conv)
+        trainingTimeAvg += trainingTime/nAgents
+        agents.append(sacAgent)
 
     # Save metadata in human-readable format.
     resources.saveHyperparameteres(
-        agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps)
+        agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTimeAvg, nProc)
 
     # Plot convergence of each agent.
-    iBest, _ = resources.plotTraining(
+    iBest, fig, ax = resources.plotTraining(
         convergenceData, saveAs="./agentData/{}_convergence.png".format(agentName))
