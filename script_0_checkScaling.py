@@ -21,11 +21,11 @@ matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 baseCaseName = "SAC_try7_performanceCheck"
-files = [f for f in os.listdir("agentData") if re.match(baseCaseName+"_[0-9]+_hyperparameters.yaml", f)]
+files = [f for f in os.listdir("agentData/performanceCheck") if re.match(baseCaseName+"_[0-9]+_hyperparameters.yaml", f)]
 
 times = []
 for f in files:
-    with open(os.path.join("./agentData", f), "r") as inf:
+    with open(os.path.join("./agentData/performanceCheck", f), "r") as inf:
         hyperparameters = yaml.safe_load(inf)
     times.append([hyperparameters["nProc"], hyperparameters["trainingTime"]])
 times = np.array(times)

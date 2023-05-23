@@ -22,14 +22,20 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 # %% Load
 trainings = {
+    # Baseline agent with nothing special.
     "Random init.":
         "SAC_try8",
-    "Pretrained actor":
-        "SAC_customInit_try0_copy_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
-    "Pretrained critic":
-        "SAC_customInit_try1_copyCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
-    "Pretrained actor and critic":
-        "SAC_customInit_try1_copyActorCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
+
+    # Own pretraining - see separate branch.
+    # "Pretrained actor":
+    #     "SAC_customInit_try0_copy_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
+    # "Pretrained critic":
+    #     "SAC_customInit_try1_copyCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
+    # "Pretrained actor and critic":
+    #     "SAC_customInit_try1_copyActorCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
+
+    # SBL pretraining.
+    # TODO
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
