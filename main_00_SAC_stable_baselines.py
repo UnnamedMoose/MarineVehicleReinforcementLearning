@@ -15,6 +15,7 @@ import shutil
 from gym.utils import seeding
 import torch
 import re
+import time
 import yaml
 import stable_baselines3
 from stable_baselines3.common.vec_env import VecMonitor
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-    agentName = "SAC_try7"
+    agentName = "SAC_try8"
 
     # Top-level switches
     do_training = True
@@ -47,32 +48,34 @@ if __name__ == "__main__":
     # agentToRestart = "SAC_try6"
 
     # No. parallel processes.
-    nProc = 8
+    nProc = 16
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 3
+    nAgents = 10
 
-    nTrainingSteps = 3_000_000
+    # Any found agent will be left alone unless this is set to true.
+    overwrite = False
+
+    nTrainingSteps = 1_500_000
 
     agent_kwargs = {
-        'learning_rate': 2e-3,
+        'learning_rate': 5e-4,
         'gamma': 0.95,
         'verbose': 1,
         'buffer_size': (128*3)*512,
-        "use_sde_at_warmup": True,
         'batch_size': 256,
         'learning_starts': 256,
         'train_freq': (1, "step"),
-        # "action_noise": VectorizedActionNoise(NormalActionNoise(
-        #     np.zeros(3), 0.1*np.ones(3)), nProc)
+        "gradient_steps": 1,
+        "action_noise": VectorizedActionNoise(NormalActionNoise(
+            np.zeros(3), 0.05*np.ones(3)), nProc),
+        "use_sde_at_warmup": False,
+        "target_entropy": -4.,
     }
     policy_kwargs = {
-        "use_sde": False,
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
-            # Actor - determines action for a specific state
             pi=[128, 128, 128],
-            # Critic - estimates value of each state-action combination
             qf=[128, 128, 128],
         )
     }
@@ -100,11 +103,16 @@ if __name__ == "__main__":
 
         # Train several times to make sure the agent doesn't just get lucky.
         convergenceData = []
-        trainingTimeAvg = 0
+        trainingTimes = []
         agents = []
         for iAgent in range(nAgents):
             # Set up constants etc.
             saveFile = "./agentData/{}_{:d}".format(agentName, iAgent)
+
+            if not overwrite:
+                if os.path.isfile(saveFile) or os.path.isfile(saveFile+".zip"):
+                    print("Skipping training of existing agent", saveFile)
+                    continue
 
             # Create the environments.
             env_eval = auv.AuvEnv()
@@ -122,20 +130,21 @@ if __name__ == "__main__":
             # Train the agent for N steps
             conv, trainingTime = resources.trainAgent(agent, nTrainingSteps, saveFile)
             convergenceData.append(conv)
-            trainingTimeAvg += trainingTime/nAgents
+            trainingTimes.append(trainingTime)
             agents.append(agent)
 
             # Evaluate
             env_eval = auv.AuvEnv()
             resources.evaluate_agent(agent, env_eval, num_episodes=100)
 
+            # Plot convergence of each agent. Redo after each agent to provide
+            # intermediate updates on how the training is going.
+            iBest, fig, ax = resources.plotTraining(
+                convergenceData, saveAs="./agentData/{}_convergence.png".format(agentName))
+
         # Save metadata in human-readable format.
         resources.saveHyperparameteres(
-            agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTimeAvg, nProc)
-
-        # Plot convergence of each agent.
-        iBest, fig, ax = resources.plotTraining(
-            convergenceData, saveAs="./agentData/{}_convergence.png".format(agentName))
+            agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTimes, nProc)
 
         # Pick the best agent.
         agent = agents[iBest]

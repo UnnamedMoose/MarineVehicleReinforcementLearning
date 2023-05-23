@@ -22,11 +22,12 @@ class PDController(object):
     """ Simple controller that emulates the action of a model used in stable baselines.
     The returned forces are capped at +/- 1 to mimic actions of an RL agent.
     Observations are assumed to start with direction to target and scaled heading error. """
-    def __init__(self, dt, P=[1., 1., 1.], D=[0.05, 0.05, 0.01]):
+    def __init__(self, dt, P=[1., 1., 1.], D=[0.05, 0.05, 0.01], noiseSigma=None):
         self.P = np.array(P)
         self.D = np.array(D)
         self.dt = dt
         self.oldObs = None
+        self.noiseSigma = noiseSigma
 
     def predict(self, obs, deterministic=True):
         # NOTE deterministic is a dummy kwarg needed to make this function look
@@ -40,9 +41,12 @@ class PDController(object):
 
         actions = np.clip(x*self.P + (x - self.oldObs)/self.dt*self.D, -1., 1.)
 
+        if self.noiseSigma is not None:
+            actions += np.random.normal(loc=0., scale=self.noiseSigma, size=actions.shape)
+
         self.oldObs = x
 
-        return actions, states
+        return np.clip(actions, -1., 1.), states
 
 
 def headingError(psi_d, psi):

@@ -385,14 +385,14 @@ def plotDetail(envs_to_plot, labels=None, title=""):
 
 # %% Functions for training.
 
-def trainAgent(agent, nTrainingSteps, saveFile):
+def trainAgent(agent, nTrainingSteps, saveFile, log_interval=100000000, progress_bar=True):
 
     # os.mkdirs(logDir, exist_ok=True)
 
     # Train the agent for N steps
     starttime = datetime.datetime.now()
     print("\nTraining started at", str(starttime))
-    agent.learn(total_timesteps=nTrainingSteps, log_interval=100000000, progress_bar=True)
+    agent.learn(total_timesteps=nTrainingSteps, log_interval=log_interval, progress_bar=progress_bar)
     endtime = datetime.datetime.now()
     trainingTime = (endtime-starttime).total_seconds()
     print("Training took {:.0f} seconds ({:.0f} minutes)".format(trainingTime, trainingTime/60.))
@@ -440,15 +440,20 @@ def plotTraining(convHistories, saveAs=None):
 
     return iBest, fig, ax
 
-def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTime, nProc):
+def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTrainingSteps, trainingTimes, nProc):
     with open("./agentData/{}_hyperparameters.yaml".format(agentName), "w") as outf:
+        try:
+            trainingTimes[0]
+        except TypeError:
+            trainingTimes = [trainingTimes]
+
         data = {
             "agentName": agentName,
             "agent_kwargs": agent_kwargs.copy(),
             "policy_kwargs": policy_kwargs.copy(),
             "env_kwargs": env_kwargs.copy(),
             "nTrainingSteps": nTrainingSteps,
-            "trainingTime": trainingTime,
+            "trainingTime": [float(t) for t in trainingTimes],
             "nProc": nProc,
         }
         # Change noise to human-readable format.
