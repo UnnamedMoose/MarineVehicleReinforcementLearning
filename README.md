@@ -24,7 +24,7 @@ controller is used as a benchmark.
 ![Alt text](Figures/episodeAnim_RL_control.gif?raw=true "Example episode.")
 
 The environment can be run in parallel using the `SubprocVecEnv` structure provided
-by ![Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3). The figure
+by [Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3). The figure
 below shows the speedup seen on my machine with 8 physical cores.
 
 ![Alt text](Figures/scalingTest.png?raw=true "Parallel environment speed-up vs no. cores.")
@@ -35,7 +35,7 @@ The code is divided into three parts:
 
 - The core of the implementation resides in `verySimpleAuv.py`, this is where the
 environment is implemented. Turbulent flow is being generated using pre-computed
-spectral POD from ![pySPOD](https://github.com/MathEXLab/PySPOD),
+spectral POD from [pySPOD](https://github.com/MathEXLab/PySPOD),
 which is implemented in `flowGenerator.py`. Helper functions for plotting,
 training and evaluating RL agents are provided in `resources.py`.
 
@@ -44,7 +44,7 @@ scripts with names starting with `main_`. Specifically:
 
     * `main_00_SAC_stable_baselines.py` - simplest possible soft-actor critic (SAC) approach using brute-force training.
 
-    * `main_01_SAC_sbl_customInit.py` - SAC supported by pretraining using the ![imitation](https://github.com/HumanCompatibleAI/imitation) library. **UNDER CONSTRUCTION**
+    * `main_01_SAC_sbl_customInit.py` - SAC supported by pretraining using the [imitation](https://github.com/HumanCompatibleAI/imitation) library. **UNDER CONSTRUCTION**
 
 - Loose scripts used for testing and visualising data
 
