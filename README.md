@@ -23,6 +23,12 @@ controller is used as a benchmark.
 
 ![Alt text](Figures/episodeAnim_RL_control.gif?raw=true "Example episode.")
 
+The environment can be run in parallel using the `SubprocVecEnv` structure provided
+by ![Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3). The figure
+below shows the speedup seen on my machine with 8 physical cores.
+
+![Alt text](Figures/scalingTest.png?raw=true "Parallel environment speed-up vs no. cores.")
+
 ## How to use
 
 The code is divided into three parts:
@@ -48,7 +54,11 @@ scripts with names starting with `main_`. Specifically:
 
     * `script_2_testImitation.py` - minimum working example for the imitation libarry.
 
-<!-- TODO add citations
+<!--
+
+TODO clean up agent data once finished with training of the new batch of agents.
+
+TODO add citations
 Button:
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4428158.svg)](https://doi.org/10.5281/zenodo.4428158)
 
