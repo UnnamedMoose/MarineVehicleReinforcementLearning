@@ -33,11 +33,13 @@ below shows the speedup seen on my machine with 8 physical cores.
 
 The code is divided into three parts:
 
-- The core of the implementation resides in `verySimpleAuv.py`, this is where the
-environment is implemented. Turbulent flow is being generated using pre-computed
-spectral POD from [pySPOD](https://github.com/MathEXLab/PySPOD),
-which is implemented in `flowGenerator.py`. Helper functions for plotting,
-training and evaluating RL agents are provided in `resources.py`.
+- Numerical core:
+
+    * The core of the implementation resides in `verySimpleAuv.py`, this is where the environment is implemented.
+
+    * Turbulent flow is being generated using pre-computed spectral POD from [pySPOD](https://github.com/MathEXLab/PySPOD), which is implemented in `flowGenerator.py`. Data has been generated using [ReFRESCO](https://www.marin.nl/en/facilities-and-tools/software/refresco) CFD code building on the synthetic turbulence generation technique described in [Lidtke et al.](https://doi.org/10.3390/jmse9111274).
+
+    * Helper functions for plotting, training and evaluating RL agents are provided in `resources.py`.
 
 - Implementations of complete training and evaluation pipelines are given in
 scripts with names starting with `main_`. Specifically:
