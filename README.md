@@ -1,4 +1,6 @@
-# UnderwaterVehicleReinforcementLearning
+# Underwater Vehicle Reinforcement Learning
+
+## Overview
 
 Simple example of how to manoeuvre an underwater vehicle using reinforcement learning.
 
@@ -11,7 +13,7 @@ The manoeuvring model is deliberately simplified
 in order to keep the simulations fast. Specifically, added mass and inertia have
 been ignored, rigid body accelerations are not taken into account, and cross-coupling
 hydrodynamic coefficients are set to zero. Only three degrees of freedom (surge,
-    sway, yaw) are considered and time integration is performed using the Euler method.
+sway, yaw) are considered and time integration is performed using the Euler method.
 All of this is done in order to make the solution procedure as fast as possible
 and allow rapid training of RL agents rather than prioritising accuracy of the
 physics model.
@@ -20,3 +22,49 @@ In addition to an RL agent, a simple proportional-derivative (PD)
 controller is used as a benchmark.
 
 ![Alt text](Figures/episodeAnim_RL_control.gif?raw=true "Example episode.")
+
+## How to use
+
+The code is divided into three parts:
+
+- The core of the implementation resides in `verySimpleAuv.py`, this is where the
+environment is implemented. Turbulent flow is being generated using pre-computed
+spectral POD from ![Alt text](https://github.com/MathEXLab/PySPOD "pySPOD"),
+which is implemented in `flowGenerator.py`. Helper functions for plotting,
+training and evaluating RL agents are provided in `resources.py`.
+
+- Implementations of complete training and evaluation pipelines are given in
+scripts with names starting with `main_`. Specifically:
+
+    * `main_00_SAC_stable_baselines.py` - simplest possible soft-actor critic (SAC) approach using brute-force training.
+
+    * `main_01_SAC_sbl_customInit.py` - SAC supported by pretraining using the ![Alt text](https://github.com/HumanCompatibleAI/imitation "imitation") library. **UNDER CONSTRUCTION**
+
+- Loose scripts used for testing and visualising data
+
+    * `script_0_checkScaling.py` - used to check parallel scaling of the environment.
+
+    * `script_1_compareTraining.py` - used to compare training histories of different models trained independently.
+
+    * `script_2_testImitation.py` - minimum working example for the imitation libarry.
+    
+<!-- TODO add citations
+Button:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4428158.svg)](https://doi.org/10.5281/zenodo.4428158)
+
+## How to cite?
+This code can be cited with:
+```
+@software{lemaire_sebastien_2021_4428158,
+  author       = {Lemaire, Sébastien and
+                  Klapwijk, Maarten},
+  title        = {pyTST},
+  month        = jan,
+  year         = 2021,
+  publisher    = {Zenodo},
+  version      = {v1.0},
+  doi          = {10.5281/zenodo.4428158},
+  url          = {https://doi.org/10.5281/zenodo.4428158}
+}
+```
+-->
