@@ -29,7 +29,7 @@ The code is divided into three parts:
 
 - The core of the implementation resides in `verySimpleAuv.py`, this is where the
 environment is implemented. Turbulent flow is being generated using pre-computed
-spectral POD from ![Alt text](https://github.com/MathEXLab/PySPOD "pySPOD"),
+spectral POD from ![pySPOD](https://github.com/MathEXLab/PySPOD),
 which is implemented in `flowGenerator.py`. Helper functions for plotting,
 training and evaluating RL agents are provided in `resources.py`.
 
@@ -38,7 +38,7 @@ scripts with names starting with `main_`. Specifically:
 
     * `main_00_SAC_stable_baselines.py` - simplest possible soft-actor critic (SAC) approach using brute-force training.
 
-    * `main_01_SAC_sbl_customInit.py` - SAC supported by pretraining using the ![Alt text](https://github.com/HumanCompatibleAI/imitation "imitation") library. **UNDER CONSTRUCTION**
+    * `main_01_SAC_sbl_customInit.py` - SAC supported by pretraining using the ![imitation](https://github.com/HumanCompatibleAI/imitation) library. **UNDER CONSTRUCTION**
 
 - Loose scripts used for testing and visualising data
 
@@ -47,7 +47,7 @@ scripts with names starting with `main_`. Specifically:
     * `script_1_compareTraining.py` - used to compare training histories of different models trained independently.
 
     * `script_2_testImitation.py` - minimum working example for the imitation libarry.
-    
+
 <!-- TODO add citations
 Button:
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4428158.svg)](https://doi.org/10.5281/zenodo.4428158)
