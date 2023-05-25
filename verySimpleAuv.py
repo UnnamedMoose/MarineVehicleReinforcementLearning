@@ -32,7 +32,7 @@ class PDController(object):
     def predict(self, obs, deterministic=True):
         # NOTE deterministic is a dummy kwarg needed to make this function look
         # like a stable baselines equivalent
-        states = np.zeros(len(self.P))
+        states = obs#np.zeros(len(self.P))
 
         x = obs[:3]
 
@@ -74,7 +74,7 @@ def headingError(psi_d, psi):
 
 class AuvEnv(gym.Env):
     def __init__(self, seed=None, dt=0.02, noiseMagCoeffs=0.0, noiseMagActuation=0.0,
-                 currentVelScale=1.0, currentTurbScale=2.0):
+                 currentVelScale=1.0, currentTurbScale=2.0, stopOnBoundsExceeded=True):
         # Call base class constructor.
         super(AuvEnv, self).__init__()
         self.seed = seed
@@ -82,6 +82,11 @@ class AuvEnv(gym.Env):
         # Tied to the no. time values stored in the turbulence data set.
         # self._max_episode_steps = 1500
         self._max_episode_steps = 250
+
+        # Whether or not to stop when bounds are exceeded. Used to disable this
+        # check when generating data for adversarial pre-training of the agent
+        # that requires episodes of equal length.
+        self.stopOnBoundsExceeded = stopOnBoundsExceeded
 
         # Updates at fixed intervals.
         self.iStep = 0
@@ -287,10 +292,12 @@ class AuvEnv(gym.Env):
 
         # Check if domain exceeded.
         if (position[0] < self.xMinMax[0]) or (position[0] > self.xMinMax[1]):
-            done = True
+            if self.stopOnBoundsExceeded:
+                done = True
             bonus += -100.
         if (position[1] < self.yMinMax[0]) or (position[1] > self.yMinMax[1]):
-            done = True
+            if self.stopOnBoundsExceeded:
+                done = True
             bonus += -100.
 
         # Compute errors.

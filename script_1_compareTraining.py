@@ -35,7 +35,8 @@ trainings = {
     #     "SAC_customInit_try1_copyActorCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
 
     # SBL pretraining.
-    # TODO
+    "Pretrained from PID":
+        "SAC_sblPretrain_try0_fromPID",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))

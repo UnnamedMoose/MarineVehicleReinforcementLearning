@@ -1,5 +1,6 @@
 agentData/*
 testEpisodes/*
+tempData/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

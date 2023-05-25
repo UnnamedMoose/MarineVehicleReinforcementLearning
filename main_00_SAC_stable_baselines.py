@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-    agentName = "SAC_try8"
+    agentName = "SAC_try8_test"
 
     # Top-level switches
     do_training = True
@@ -51,10 +51,10 @@ if __name__ == "__main__":
     nProc = 16
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 10
+    nAgents = 1
 
     # Any found agent will be left alone unless this is set to true.
-    overwrite = False
+    overwrite = True
 
     nTrainingSteps = 1_500_000
 
