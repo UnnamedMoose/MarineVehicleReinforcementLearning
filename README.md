@@ -54,7 +54,7 @@ scripts with names starting with `main_`. Specifically:
 
     * `script_1_compareTraining.py` - used to compare training histories of different models trained independently.
 
-    * `script_2_testImitation.py` - minimum working example for the imitation libarry.
+    * `script_2_testImitation.py` - minimum working example for the imitation library.
 
 <!--
 

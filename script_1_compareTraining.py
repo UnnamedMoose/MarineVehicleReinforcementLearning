@@ -23,8 +23,12 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 # %% Load
 trainings = {
     # Baseline agent with nothing special.
-    "Random init.":
-        "SAC_try8",
+    "Random init.": "SAC_try8",
+
+    # Restart tests.
+    "For restart": "SAC_try8_forRestart",
+    "Restart": "SAC_try8_restart",
+    "Restart no replay buffer": "SAC_try8_restart_noReplayBuffer",
 
     # Own pretraining - see separate branch.
     # "Pretrained actor":
@@ -35,8 +39,7 @@ trainings = {
     #     "SAC_customInit_try1_copyActorCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
 
     # SBL pretraining.
-    "Pretrained from PID":
-        "SAC_sblPretrain_try0_fromPID",
+    # "Pretrained from PID": "SAC_sblPretrain_try0_fromPID",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))

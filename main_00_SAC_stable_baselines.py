@@ -36,7 +36,16 @@ if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-    agentName = "SAC_try8_test"
+    # TODO retrain with an extended state that will include surface pressure estimates
+    # based on body velocity, or maybe just zeros? These are needed to restart training in CFD.
+
+    # For saving trained agents.
+    agentName = "SAC_try8_restart_noReplayBuffer"
+
+    # Set to None to pick the best agent from the trained set. Specify as string
+    # to load a particular saved model.
+    agentName_eval = None
+    # agentName_eval = "SAC_try8_0"
 
     # Top-level switches
     do_training = True
@@ -44,8 +53,8 @@ if __name__ == "__main__":
 
     # --- Training parameters ---
 
-    agentToRestart = None
-    # agentToRestart = "SAC_try6"
+    # agentToRestart = None
+    agentToRestart = "SAC_try8_forRestart_0"
 
     # No. parallel processes.
     nProc = 16
@@ -56,7 +65,8 @@ if __name__ == "__main__":
     # Any found agent will be left alone unless this is set to true.
     overwrite = True
 
-    nTrainingSteps = 1_500_000
+    # nTrainingSteps = 1_500_000
+    nTrainingSteps = 500_000
 
     agent_kwargs = {
         'learning_rate': 5e-4,
@@ -124,14 +134,19 @@ if __name__ == "__main__":
                 agent = stable_baselines3.SAC(
                     "MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
             else:
-                agent = stable_baselines3.SAC.load("./bestAgent/{}".format(agentToRestart))
-                agent.set_env(env)
+                agent = stable_baselines3.SAC.load("./agentData/{}".format(agentToRestart),
+                                                   env=env, force_reset=False)
+                # agent.load_replay_buffer("./agentData/{}_replayBuffer".format(agentToRestart))
 
             # Train the agent for N steps
             conv, trainingTime = resources.trainAgent(agent, nTrainingSteps, saveFile)
             convergenceData.append(conv)
             trainingTimes.append(trainingTime)
             agents.append(agent)
+
+            # Save the model and replay buffer.
+            agent.save(saveFile)
+            agent.save_replay_buffer(saveFile+"_replayBuffer")
 
             # Evaluate
             env_eval = auv.AuvEnv()
@@ -148,6 +163,10 @@ if __name__ == "__main__":
 
         # Pick the best agent.
         agent = agents[iBest]
+
+        # Override for evaluation
+        if agentName_eval is None:
+            agentName_eval = "{}_{:d}".format(agentName, iBest)
 
         # Trained agent.
         print("\nAfter training")
@@ -168,14 +187,14 @@ if __name__ == "__main__":
     if do_evaluation:
         # Create the environment and load the best agent to-date.
         env_eval = auv.AuvEnv(**env_kwargs_evaluation)
-        agent = stable_baselines3.SAC.load("./bestAgent/{}".format(agentName))
+        agent = stable_baselines3.SAC.load("./agentData/{}".format(agentName_eval))
 
         # Load the hyperparamters as well for demonstration purposes.
-        with open("./bestAgent/{}_hyperparameters.yaml".format(agentName), "r") as outf:
-            hyperparameters = yaml.safe_load(outf)
+        # with open("./agentData/{}_hyperparameters.yaml".format(agentName_eval), "r") as outf:
+        #     hyperparameters = yaml.safe_load(outf)
 
         # Load the convergence history of the agent for demonstration purposes.
-        convergence = pandas.read_csv("./bestAgent/{}_monitor.csv".format(agentName), skiprows=1)
+        convergence = pandas.read_csv("./agentData/{}.monitor.csv".format(agentName_eval), skiprows=1)
 
         # Plot agent convergence history.
         fig, ax = plt.subplots()
@@ -198,8 +217,10 @@ if __name__ == "__main__":
 
         # Evaluate once with fixed initial conditions.
         print("\nLike-for-like comparison")
+        print("RL agent")
         resources.evaluate_agent(agent, env_eval, num_episodes=1,
                                  init=[[-0.5, -0.5], 0.785, 1.57])
+        print("PD controller")
         resources.evaluate_agent(pdController, env_eval_pd, num_episodes=1,
                                  init=[[-0.5, -0.5], 0.785, 1.57])
         resources.plotEpisode(env_eval, "RL control fixed init")

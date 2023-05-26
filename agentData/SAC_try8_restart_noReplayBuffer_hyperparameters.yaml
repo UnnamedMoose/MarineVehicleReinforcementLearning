@@ -1,0 +1,43 @@
+agentName: SAC_try8_restart_noReplayBuffer
+agent_kwargs:
+  action_noise:
+    mu:
+    - 0.0
+    - 0.0
+    - 0.0
+    sigma:
+    - 0.05
+    - 0.05
+    - 0.05
+  batch_size: 256
+  buffer_size: 196608
+  gamma: 0.95
+  gradient_steps: 1
+  learning_rate: 0.0005
+  learning_starts: 256
+  target_entropy: -4.0
+  train_freq:
+  - 1
+  - step
+  use_sde_at_warmup: false
+  verbose: 1
+env_kwargs:
+  currentTurbScale: 2.0
+  currentVelScale: 1.0
+  noiseMagActuation: 0.1
+  noiseMagCoeffs: 0.1
+nProc: 16
+nTrainingSteps: 500000
+policy_kwargs:
+  activation_fn: <class 'torch.nn.modules.activation.GELU'>
+  net_arch:
+    pi:
+    - 128
+    - 128
+    - 128
+    qf:
+    - 128
+    - 128
+    - 128
+trainingTime:
+- 995.957095
