@@ -136,7 +136,7 @@ class AuvEnv(gym.Env):
                                            shape=(self.lenAction,), dtype=np.float32)
 
         # Observation space.
-        lenState = 9
+        lenState = 9 + 2
         self.observation_space = gym.spaces.Box(
             -1*np.ones(lenState, dtype=np.float32),
             np.ones(lenState, dtype=np.float32),
@@ -167,7 +167,8 @@ class AuvEnv(gym.Env):
                 min(1., max(-1., (perr[0]-self.perr_o[0])/0.025)),
                 min(1., max(-1., (perr[1]-self.perr_o[1])/0.025)),
             ]),
-            np.clip(velocities/[0.2, 0.2, 30./180.*np.pi], -1., 1.)
+            np.clip(velocities/[0.2, 0.2, 30./180.*np.pi], -1., 1.),
+            np.zeros(2),  # Placeholder for additional state variables used only in CFD
         ])
 
         return newState

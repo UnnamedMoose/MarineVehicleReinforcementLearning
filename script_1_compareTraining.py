@@ -23,12 +23,15 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 # %% Load
 trainings = {
     # Baseline agent with nothing special.
-    "Random init.": "SAC_try8",
+    # "Random init.": "SAC_try8",
+
+    # 2 dummy state vars for CFD integration
+    "Random init long state": "SAC_try9",
 
     # Restart tests.
-    "For restart": "SAC_try8_forRestart",
-    "Restart": "SAC_try8_restart",
-    "Restart no replay buffer": "SAC_try8_restart_noReplayBuffer",
+    # "For restart": "SAC_try8_forRestart",
+    # "Restart": "SAC_try8_restart",
+    # "Restart no replay buffer": "SAC_try8_restart_noReplayBuffer",
 
     # Own pretraining - see separate branch.
     # "Pretrained actor":
@@ -39,7 +42,7 @@ trainings = {
     #     "SAC_customInit_try1_copyActorCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
 
     # SBL pretraining.
-    # "Pretrained from PID": "SAC_sblPretrain_try0_fromPID",
+    "Pretrained from PID": "SAC_sblPretrain_try0_fromPID",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
@@ -67,11 +70,18 @@ ax[1].grid(axis="y", linestyle="dashed")
 
 lns = []
 for i, t in enumerate(trainings):
+    kBest = None
     for k in data:
         if t not in k:
             continue
+        elif kBest is None:
+            kBest = k
         ln = ax[0].plot(data[k]["r"], c=colours[i], label=t)
+        if np.mean(data[k]["r"].values[-50:]) > np.mean(data[kBest]["r"].values[-50:]):
+            kBest = k
         ax[1].plot(data[k]["l"], c=colours[i], label=t)
+    # print(t, kBest)
+    # ax[0].plot(data[kBest]["r"], "b-", lw=4, alpha=0.25)
     lns += ln
 fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=3, framealpha=1)
 

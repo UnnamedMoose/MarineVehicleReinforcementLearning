@@ -36,11 +36,8 @@ if __name__ == "__main__":
     # An ugly fix for OpenMP conflicts in my installation.
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-    # TODO retrain with an extended state that will include surface pressure estimates
-    # based on body velocity, or maybe just zeros? These are needed to restart training in CFD.
-
     # For saving trained agents.
-    agentName = "SAC_try8_restart_noReplayBuffer"
+    agentName = "SAC_try9"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -52,22 +49,22 @@ if __name__ == "__main__":
     do_evaluation = False
 
     # --- Training parameters ---
-
-    # agentToRestart = None
-    agentToRestart = "SAC_try8_forRestart_0"
+    loadReplayBuffer = True  # For a "perfect" restart keep this on.
+    agentToRestart = None
+    # agentToRestart = "SAC_try8_forRestart_0"
 
     # No. parallel processes.
     nProc = 16
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 1
+    nAgents = 5
 
     # Any found agent will be left alone unless this is set to true.
     overwrite = True
 
-    # nTrainingSteps = 1_500_000
-    nTrainingSteps = 500_000
-
+    nTrainingSteps = 1_500_000
+    # nTrainingSteps = 500_000
+#
     agent_kwargs = {
         'learning_rate': 5e-4,
         'gamma': 0.95,
@@ -80,7 +77,9 @@ if __name__ == "__main__":
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.05*np.ones(3)), nProc),
         "use_sde_at_warmup": False,
-        "target_entropy": -4.,
+        # "target_entropy": -4.,
+        "target_entropy": "auto",
+        "ent_coef": "auto_0.1",
     }
     policy_kwargs = {
         "activation_fn": torch.nn.GELU,
@@ -136,7 +135,8 @@ if __name__ == "__main__":
             else:
                 agent = stable_baselines3.SAC.load("./agentData/{}".format(agentToRestart),
                                                    env=env, force_reset=False)
-                # agent.load_replay_buffer("./agentData/{}_replayBuffer".format(agentToRestart))
+                if loadReplayBuffer:
+                    agent.load_replay_buffer("./agentData/{}_replayBuffer".format(agentToRestart))
 
             # Train the agent for N steps
             conv, trainingTime = resources.trainAgent(agent, nTrainingSteps, saveFile)

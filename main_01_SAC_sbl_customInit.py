@@ -115,7 +115,7 @@ if __name__ == "__main__":
 # %% Create test rollouts.
 
     # Create a random seed.
-    seed = 1
+    seed = 3
     rng = np.random.default_rng(seed)
     np.random.seed(seed)
 
@@ -146,52 +146,12 @@ if __name__ == "__main__":
         observations = ep[stateVars].values
         actions = ep[actionVars].values[:-1]
         rewards = ep["reward"].values[:-1]
-        # observations = [ep[stateVars].values[0]]
-        # actions = np.empty((0, env_pretrain.action_space.shape[0]))
-        # rewards = []
-        # for i in range(1, len(ep)):
-        #     obs = ep[stateVars].values[i]
-        #     action = ep[actionVars].values[i]
-        #     reward = ep["reward"].values[i]
-        #     observations = np.append(observations, obs[np.newaxis, :], axis=0)
-        #     actions = np.append(actions, action[np.newaxis, :], axis=0)
-        #     rewards = np.append(rewards, reward)
 
         out_dict_stacked = {"rews": rewards, "acts": actions, "obs": observations, "infos": None}
         traj = TrajectoryWithRew(**out_dict_stacked, terminal=(rewards[-1] < -200))
         assert traj.rews.shape[0] == traj.acts.shape[0] == traj.obs.shape[0] - 1
 
         rollouts.append(traj)
-
-    # Initial approach with creating rollouts from the env directly. Storing and
-    # reading data is faster and allows the same data to be reused for reproducibility.
-    # # Create own rollout generation to circumvent the issues with the imitation wrappers.
-    # rollouts = []
-    # for iEp in range(nPretrainEpisodes):
-    #     obs = env_pretrain.reset()
-    #     observations = [obs]
-    #     actions = np.empty((0, env_pretrain.action_space.shape[0]))
-    #     rewards = []
-    #     for i in range(env_pretrain._max_episode_steps):
-    #         action, _states = pdController.predict(obs, deterministic=True)
-    #         obs, reward, done, info = env_pretrain.step(action)
-    #         observations = np.append(observations, obs[np.newaxis, :], axis=0)
-    #         actions = np.append(actions, action[np.newaxis, :], axis=0)
-    #         rewards = np.append(rewards, reward)
-
-    #     out_dict_stacked = {"rews": rewards, "acts": actions, "obs": observations, "infos": None}
-    #     traj = TrajectoryWithRew(**out_dict_stacked, terminal=done)
-    #     assert traj.rews.shape[0] == traj.acts.shape[0] == traj.obs.shape[0] - 1
-
-    #     rollouts.append(traj)
-
-    # # Pack the generated rollouts into DataFrames for eventual saving and easier visualisation.
-    # pretrainEpisodes = []
-    # for r in rollouts:
-    #     pretrainEpisodes.append(pandas.DataFrame(
-    #         data=np.concatenate([r.obs[1:, :], r.acts, r.rews[:, np.newaxis]], axis=1),
-    #         columns=["s{:d}".format(i) for i in range(r.obs.shape[1])] +
-    #             ["a{:d}".format(i) for i in range(r.acts.shape[1])] + ["r"]))
 
     # Plot the different training episodes.
     fig, ax = plt.subplots()
@@ -228,7 +188,7 @@ if __name__ == "__main__":
 
         # Evaluate
         print("\nRandomly initialised agent")
-        rewards_init, _ = resources.evaluate_agent(agent, env_eval, num_episodes=100)
+        _, rewards_init = resources.evaluate_agent(agent, env_eval, num_episodes=100)
 
         # TODO Choose episodes for pretraining at random.
         iPretrain = np.random.default_rng().choice(
@@ -258,7 +218,7 @@ if __name__ == "__main__":
 
         # Evaluate
         print("\nPretrained agent")
-        rewards_pre, _ = resources.evaluate_agent(agent, env_eval, num_episodes=100)
+        _, rewards_pre = resources.evaluate_agent(agent, env_eval, num_episodes=100)
 
         # Save the pretrained agent.
         agent.save(saveFile+"_pretrained")
@@ -283,7 +243,7 @@ if __name__ == "__main__":
 
         # Evaluate
         print("\nTrained agent")
-        rewards_trained, _ = resources.evaluate_agent(agent, env_eval, num_episodes=100)
+        _, rewards_trained = resources.evaluate_agent(agent, env_eval, num_episodes=100)
 
         # Plot convergence of each agent. Redo after each agent to provide
         # intermediate updates on how the training is going.
@@ -294,15 +254,13 @@ if __name__ == "__main__":
         fig, ax = plt.subplots()
         ax.set_xlabel("Reward range")
         ax.set_ylabel("Episode count")
-        bins = np.linspace(0, rewards_trained.max(), 11)
-        h, x = np.histogram(rewards_init, bins=bins)
-        x = (x[1:] + x[:-1])/2
+        bins = np.linspace(0, np.max(rewards_trained), 11)
+        x = (bins[1:] + bins[:-1])/2
+        h, _ = np.histogram(rewards_init, bins=bins)
         plt.bar(x, h, color="green", alpha=0.5, label="Initialised", width=20)
-        h, x = np.histogram(rewards_pre, bins=bins)
-        x = (x[1:] + x[:-1])/2
+        h, _ = np.histogram(rewards_pre, bins=bins)
         plt.bar(x, h, color="blue", alpha=0.5, label="Pretrained", width=20)
-        h, x = np.histogram(rewards_trained, bins=bins)
-        x = (x[1:] + x[:-1])/2
+        h, _ = np.histogram(rewards_trained, bins=bins)
         plt.bar(x, h, color="red", alpha=0.5, label="Pretrained+Trained", width=20)
         ax.legend()
 
