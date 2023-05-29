@@ -62,7 +62,7 @@ scripts with names starting with `main_`. Specifically:
 
 This code can be cited with
 
-`
+```
 @software{Lidtke_2023_7981976,
   author       = {Lidtke, Artur K.},
   title        = {Underwater Vehicle Reinforcement Learning},
@@ -73,4 +73,4 @@ This code can be cited with
   doi          = {10.5281/zenodo.7981976},
   url          = {https://doi.org/10.5281/zenodo.7981976}
 }
-`
+```
