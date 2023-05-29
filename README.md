@@ -1,5 +1,7 @@
 # Underwater Vehicle Reinforcement Learning
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7981976.svg)](https://doi.org/10.5281/zenodo.7981976)
+
 ## Overview
 
 Simple example of how to manoeuvre an underwater vehicle using reinforcement learning.
@@ -56,27 +58,19 @@ scripts with names starting with `main_`. Specifically:
 
     * `script_2_testImitation.py` - minimum working example for the imitation library.
 
-<!--
-
-TODO clean up agent data once finished with training of the new batch of agents.
-
-TODO add citations
-Button:
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4428158.svg)](https://doi.org/10.5281/zenodo.4428158)
-
 ## How to cite?
-This code can be cited with:
-```
-@software{lemaire_sebastien_2021_4428158,
-  author       = {Lemaire, Sébastien and
-                  Klapwijk, Maarten},
-  title        = {pyTST},
-  month        = jan,
-  year         = 2021,
+
+This code can be cited with
+
+`
+@software{Lidtke_2023_7981976,
+  author       = {Lidtke, Artur K.},
+  title        = {Underwater Vehicle Reinforcement Learning},
+  month        = May,
+  year         = 2023,
   publisher    = {Zenodo},
   version      = {v1.0},
-  doi          = {10.5281/zenodo.4428158},
-  url          = {https://doi.org/10.5281/zenodo.4428158}
+  doi          = {10.5281/zenodo.7981976},
+  url          = {https://doi.org/10.5281/zenodo.7981976}
 }
-```
--->
+`
