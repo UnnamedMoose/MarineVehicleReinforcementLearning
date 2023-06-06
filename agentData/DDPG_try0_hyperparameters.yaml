@@ -1,0 +1,44 @@
+agentName: DDPG_try0
+agent_kwargs:
+  action_noise:
+    mu:
+    - 0.0
+    - 0.0
+    - 0.0
+    sigma:
+    - 0.05
+    - 0.05
+    - 0.05
+  batch_size: 256
+  buffer_size: 196608
+  gamma: 0.95
+  gradient_steps: 1
+  learning_rate: 0.002
+  learning_starts: 256
+  train_freq:
+  - 1
+  - step
+  verbose: 1
+env_kwargs:
+  currentTurbScale: 2.0
+  currentVelScale: 1.0
+  noiseMagActuation: 0.1
+  noiseMagCoeffs: 0.1
+nProc: 16
+nTrainingSteps: 1500000
+policy_kwargs:
+  activation_fn: <class 'torch.nn.modules.activation.GELU'>
+  n_critics: 1
+  net_arch:
+    pi:
+    - 128
+    - 128
+    - 128
+    qf:
+    - 128
+    - 128
+    - 128
+trainingTime:
+- 1992.531839
+- 1891.193268
+- 2306.096661

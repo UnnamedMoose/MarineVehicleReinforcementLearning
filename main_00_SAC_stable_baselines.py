@@ -37,7 +37,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "SAC_try9"
+    agentName = "TD3_try0"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     # Top-level switches
     do_training = True
-    do_evaluation = False
+    do_evaluation = True
 
     # --- Training parameters ---
     loadReplayBuffer = True  # For a "perfect" restart keep this on.
@@ -57,16 +57,16 @@ if __name__ == "__main__":
     nProc = 16
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 5
+    nAgents = 3
 
     # Any found agent will be left alone unless this is set to true.
-    overwrite = True
+    overwrite = False
 
     nTrainingSteps = 1_500_000
     # nTrainingSteps = 500_000
 #
     agent_kwargs = {
-        'learning_rate': 5e-4,
+        'learning_rate': 2e-3,#5e-4,
         'gamma': 0.95,
         'verbose': 1,
         'buffer_size': (128*3)*512,
@@ -76,17 +76,17 @@ if __name__ == "__main__":
         "gradient_steps": 1,
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.05*np.ones(3)), nProc),
-        "use_sde_at_warmup": False,
-        # "target_entropy": -4.,
-        "target_entropy": "auto",
-        "ent_coef": "auto_0.1",
+        # SAC-specific
+        # "use_sde_at_warmup": False,
+        # "target_entropy": "auto",
+        # "ent_coef": "auto",
     }
     policy_kwargs = {
         "activation_fn": torch.nn.GELU,
         "net_arch": dict(
             pi=[128, 128, 128],
             qf=[128, 128, 128],
-        )
+        ),
     }
     env_kwargs = {
         # Set to zero to disable the flow - much faster training.
@@ -130,7 +130,9 @@ if __name__ == "__main__":
 
             # Create the agent using stable baselines.
             if agentToRestart is None:
-                agent = stable_baselines3.SAC(
+                # agent = stable_baselines3.SAC(
+                # agent = stable_baselines3.DDPG(
+                agent = stable_baselines3.TD3(
                     "MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
             else:
                 agent = stable_baselines3.SAC.load("./agentData/{}".format(agentToRestart),
@@ -187,7 +189,9 @@ if __name__ == "__main__":
     if do_evaluation:
         # Create the environment and load the best agent to-date.
         env_eval = auv.AuvEnv(**env_kwargs_evaluation)
-        agent = stable_baselines3.SAC.load("./agentData/{}".format(agentName_eval))
+        # agent = stable_baselines3.SAC.load("./agentData/{}".format(agentName_eval))
+        # agent = stable_baselines3.DDPG.load("./agentData/{}".format(agentName_eval))
+        agent = stable_baselines3.TD3.load("./agentData/{}".format(agentName_eval))
 
         # Load the hyperparamters as well for demonstration purposes.
         # with open("./agentData/{}_hyperparameters.yaml".format(agentName_eval), "r") as outf:

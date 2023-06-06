@@ -26,7 +26,7 @@ trainings = {
     # "Random init.": "SAC_try8",
 
     # 2 dummy state vars for CFD integration
-    "Random init long state": "SAC_try9",
+    "SAC": "SAC_try9",
 
     # Restart tests.
     # "For restart": "SAC_try8_forRestart",
@@ -42,7 +42,18 @@ trainings = {
     #     "SAC_customInit_try1_copyActorCritic_LR_5e-4_targetEntropy_-4_actionNoise_0.05",
 
     # SBL pretraining.
-    "Pretrained from PID": "SAC_sblPretrain_try0_fromPID",
+    # "Pretrained from PID": "SAC_sblPretrain_try0_fromPID",
+
+    # Entropy settings.
+    # "LR 5e-4, all auto": "SAC_try9",
+    # "LR 2e-3, all auto": "SAC_try9_trainingTest_lr_2e-3_target_entropy_auto_ent_coef_auto",
+    # "LR 2e-3, ent. coeff auto 5.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_auto_ent_coef_auto_5.0",
+    # "LR 2e-3, ent. coeff auto 0.01": "SAC_try9_trainingTest_lr_2e-3_target_entropy_auto_ent_coef_auto_0.01",
+    # "LR 2e-3, ent. target -1.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-1.0_ent_coef_auto",
+    # "LR 2e-3, ent. target -8.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-8.0_ent_coef_auto",
+
+    "DDPG": "DDPG_try0",
+    "TD3": "TD3_try0",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
