@@ -131,23 +131,16 @@ if __name__ == "__main__":
                     continue
 
             # Create the environments.
-            env_eval = auv.AuvEnv()
             env = SubprocVecEnv([auv.make_env(i, env_kwargs=env_kwargs) for i in range(nProc)])
             env = VecMonitor(env, saveFile)
 
             # Create the agent using stable baselines.
             if agentToRestart is None:
-                # agent = stable_baselines3.SAC(
-                # agent = stable_baselines3.DDPG(
-                # agent = stable_baselines3.TD3(
-                agent = sb3_contrib.TQC(
-                    "MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
-                # agent = sb3_contrib.RecurrentPPO(
-                    # "MlpLstmPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
+                agent = sb3_contrib.TQC("MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
+                # agent = sb3_contrib.RecurrentPPO("MlpLstmPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
 
             else:
-                agent = sb3_contrib.TQC.load("./agentData/{}".format(agentToRestart),
-                                             env=env)#, force_reset=False)
+                agent = sb3_contrib.TQC.load("./agentData/{}".format(agentToRestart), env=env)
                 agent.set_parameters("./agentData/{}".format(agentToRestart))
                 if loadReplayBuffer:
                     agent.load_replay_buffer("./agentData/{}_replayBuffer".format(agentToRestart))
@@ -166,10 +159,6 @@ if __name__ == "__main__":
             except AttributeError:
                 pass
 
-            # Evaluate
-            env_eval = auv.AuvEnv()
-            resources.evaluate_agent(agent, env_eval, num_episodes=100)
-
             # Plot convergence of each agent. Redo after each agent to provide
             # intermediate updates on how the training is going.
             iBest, fig, ax = resources.plotTraining(
@@ -185,6 +174,9 @@ if __name__ == "__main__":
         # Override for evaluation
         if agentName_eval is None:
             agentName_eval = "{}_{:d}".format(agentName, iBest)
+
+        # Evaluation env for a quick check.
+        env_eval = auv.AuvEnv(**env_kwargs_evaluation)
 
         # Trained agent.
         print("\nAfter training")
@@ -205,9 +197,7 @@ if __name__ == "__main__":
     if do_evaluation:
         # Create the environment and load the best agent to-date.
         env_eval = auv.AuvEnv(**env_kwargs_evaluation)
-        # agent = stable_baselines3.SAC.load("./agentData/{}".format(agentName_eval))
-        # agent = stable_baselines3.DDPG.load("./agentData/{}".format(agentName_eval))
-        agent = stable_baselines3.TD3.load("./agentData/{}".format(agentName_eval))
+        agent = sb3_contrib.TQC.load("./agentData/{}".format(agentName_eval))
 
         # Load the hyperparamters as well for demonstration purposes.
         # with open("./agentData/{}_hyperparameters.yaml".format(agentName_eval), "r") as outf:
