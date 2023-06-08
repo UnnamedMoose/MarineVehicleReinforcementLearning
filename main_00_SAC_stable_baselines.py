@@ -17,6 +17,7 @@ import torch
 import re
 import time
 import yaml
+import sb3_contrib
 import stable_baselines3
 from stable_baselines3.common.vec_env import VecMonitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
@@ -37,7 +38,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "TD3_try0"
+    agentName = "TQC_try1"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -57,29 +58,35 @@ if __name__ == "__main__":
     nProc = 16
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 3
+    nAgents = 5
 
     # Any found agent will be left alone unless this is set to true.
     overwrite = False
 
     nTrainingSteps = 1_500_000
     # nTrainingSteps = 500_000
-#
+
     agent_kwargs = {
-        'learning_rate': 2e-3,#5e-4,
         'gamma': 0.95,
         'verbose': 1,
-        'buffer_size': (128*3)*512,
         'batch_size': 256,
+
+        # SAC-specific
+        # "use_sde_at_warmup": False,
+        # "target_entropy": "auto",
+        # "ent_coef": "auto",
+
+        # Not included in RecurrentPPO
+        'learning_rate': 2e-3,
+        'buffer_size': (128*3)*512,
         'learning_starts': 256,
         'train_freq': (1, "step"),
         "gradient_steps": 1,
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.05*np.ones(3)), nProc),
-        # SAC-specific
-        # "use_sde_at_warmup": False,
-        # "target_entropy": "auto",
-        # "ent_coef": "auto",
+
+        # Special for RecurrentPPO
+        # 'learning_rate': 5e-4,
     }
     policy_kwargs = {
         "activation_fn": torch.nn.GELU,
@@ -132,11 +139,15 @@ if __name__ == "__main__":
             if agentToRestart is None:
                 # agent = stable_baselines3.SAC(
                 # agent = stable_baselines3.DDPG(
-                agent = stable_baselines3.TD3(
+                # agent = stable_baselines3.TD3(
+                agent = sb3_contrib.TQC(
                     "MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
+                # agent = sb3_contrib.RecurrentPPO(
+                    # "MlpLstmPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
+
             else:
-                agent = stable_baselines3.SAC.load("./agentData/{}".format(agentToRestart),
-                                                   env=env, force_reset=False)
+                agent = sb3_contrib.TQC.load("./agentData/{}".format(agentToRestart),
+                                             env=env, force_reset=False)
                 if loadReplayBuffer:
                     agent.load_replay_buffer("./agentData/{}_replayBuffer".format(agentToRestart))
 
@@ -148,7 +159,11 @@ if __name__ == "__main__":
 
             # Save the model and replay buffer.
             agent.save(saveFile)
-            agent.save_replay_buffer(saveFile+"_replayBuffer")
+            # Models like PPO don't have a buffer.
+            try:
+                agent.save_replay_buffer(saveFile+"_replayBuffer")
+            except AttributeError:
+                pass
 
             # Evaluate
             env_eval = auv.AuvEnv()

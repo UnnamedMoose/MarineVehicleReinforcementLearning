@@ -21,6 +21,10 @@ matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 # %% Load
+
+comparisonLabel = "differentAgents"
+nRolling = 500
+
 trainings = {
     # Baseline agent with nothing special.
     # "Random init.": "SAC_try8",
@@ -54,6 +58,8 @@ trainings = {
 
     "DDPG": "DDPG_try0",
     "TD3": "TD3_try0",
+    "TQC": "TQC_try0",
+    "LSTM PPO": "RecurrentPPO_try0",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
@@ -64,20 +70,22 @@ for t in trainings:
              or re.match(trainings[t]+"_[0-9]+.zip.monitor.csv", f)]
     for i, f in enumerate(files):
         df = pandas.read_csv(os.path.join("agentData", f), skiprows=1)
-        data["{} {:d}".format(t, i)] = df[["r", "l"]].rolling(200).mean().dropna()
+        data["{} {:d}".format(t, i)] = df[["r", "l"]].rolling(nRolling).mean().dropna()
 
 # %% Plot.
 fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 8))
 plt.subplots_adjust(top=0.87, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
-# ax[0].set_xlim((0, 6000))
-# ax[1].set_xlim((0, 6000))
-ax[0].set_ylim((-100, 700))
+# ax[0].set_xlim((nRolling, 1e4))
+# ax[1].set_xlim((nRolling, 1e4))
+# ax[0].set_ylim((-100, 700))
 ax[0].set_xlabel("Episode")
 ax[1].set_xlabel("Episode")
 ax[0].set_ylabel("Moving average of reward")
 ax[1].set_ylabel("Moving everage of episode length")
 ax[0].grid(axis="y", linestyle="dashed")
 ax[1].grid(axis="y", linestyle="dashed")
+ax[0].set_xscale("log")
+ax[1].set_xscale("log")
 
 lns = []
 for i, t in enumerate(trainings):
@@ -87,12 +95,12 @@ for i, t in enumerate(trainings):
             continue
         elif kBest is None:
             kBest = k
-        ln = ax[0].plot(data[k]["r"], c=colours[i], label=t)
+        ln = ax[0].plot(data[k]["r"], c=colours[i], label=t, lw=2)
         if np.mean(data[k]["r"].values[-50:]) > np.mean(data[kBest]["r"].values[-50:]):
             kBest = k
-        ax[1].plot(data[k]["l"], c=colours[i], label=t)
+        ax[1].plot(data[k]["l"], c=colours[i], label=t, lw=2)
     # print(t, kBest)
     # ax[0].plot(data[kBest]["r"], "b-", lw=4, alpha=0.25)
     lns += ln
-fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=3, framealpha=1)
-
+fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=6, framealpha=1)
+plt.savefig("./Figures/trainingComparison_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")

@@ -466,6 +466,9 @@ def saveHyperparameteres(agentName, agent_kwargs, policy_kwargs, env_kwargs, nTr
             pass
         # Convert types because yaml is yaml.
         data["policy_kwargs"]["activation_fn"] = str(policy_kwargs["activation_fn"])
-        data["agent_kwargs"]["train_freq"] = list(agent_kwargs["train_freq"])
+        try:
+            data["agent_kwargs"]["train_freq"] = list(agent_kwargs["train_freq"])
+        except KeyError:
+            pass
         # Write.
         yaml.dump(data, outf, default_flow_style=False)

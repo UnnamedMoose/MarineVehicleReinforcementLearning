@@ -12,6 +12,7 @@ import os
 import re
 import platform
 import stable_baselines3
+import sb3_contrib
 
 font = {"family": "serif",
         "weight": "normal",
@@ -37,41 +38,72 @@ if __name__ == "__main__":
         "noiseMagCoeffs": 0.,
     }
 
+    comparisonLabel = "differentAgents"
     agentSaves = {
-        "SAC": "SAC_try9_0",
-        "DDPG": "DDPG_try0_1",
-        "TD3": "TD3_try0_0",
+        "SAC": "SAC_try9",
+        "DDPG": "DDPG_try0",
+        "TD3": "TD3_try0",
+        "TQC": "TQC_try0",
+        "LSTM PPO": "RecurrentPPO_try0",
     }
 
     env_eval = auv.AuvEnv(**env_kwargs_evaluation)
 
     agents = {}
-    for name in agentSaves:
-        if name == "SAC":
-            agents[name] = stable_baselines3.SAC.load("./agentData/{}".format(agentSaves[name]))
-        elif name == "DDPG":
-            agents[name] = stable_baselines3.DDPG.load("./agentData/{}".format(agentSaves[name]))
-        elif name == "TD3":
-            agents[name] = stable_baselines3.TD3.load("./agentData/{}".format(agentSaves[name]))
-        else:
-            raise ValueError("Agent {} not set up".format(name))
-
     meanRewards = {}
     allRewards = {}
-    for name in agents:
-        print("\n"+name)
-        meanRewards[name], allRewards[name] = resources.evaluate_agent(
-            agents[name], env_eval, num_episodes=nEpisodesEval)
+    bestVersions = {}
+    for name in agentSaves:
+        # Evaluate each saved version and pick the best one.
+        files = [f for f in os.listdir("agentData") if re.match(agentSaves[name]+"_[0-9]+.zip", f)]
+
+        print("\n{} - evaluating {:d} versions".format(name, len(files)))
+
+        for i, filename in enumerate(files):
+            classDict = {
+                "SAC": stable_baselines3.SAC,
+                "DDPG": stable_baselines3.DDPG,
+                "TD3": stable_baselines3.TD3,
+                "TQC": sb3_contrib.TQC,
+                "LSTM PPO": sb3_contrib.RecurrentPPO,
+            }
+            agents[name] = classDict[name].load("./agentData/{}".format(filename))
+
+            meanReward, allReward = resources.evaluate_agent(
+                agents[name], env_eval, num_episodes=nEpisodesEval)
+
+            if name not in meanRewards:
+                meanRewards[name] = [meanReward]
+            else:
+                meanRewards[name] = np.append(meanRewards[name], meanReward)
+
+            if name not in allRewards:
+                allRewards[name] = allReward
+                bestVersions[name] = filename
+            elif meanReward > np.max(meanRewards[name]):
+                allRewards[name] = allReward
+                bestVersions[name] = filename
 
 # %% Plot
 
     colours = plt.cm.nipy_spectral(np.linspace(0, 0.95, len(agentSaves)))
 
-    # Compare mean rewards.
+    # Compare mean rewards for all variants of each agent.
+    fig, ax = plt.subplots()
+    ax.set_xlabel("Agent variant")
+    ax.set_ylabel("Reward")
+    for i, name in enumerate(agents):
+        x = np.array(range(len(meanRewards[name]))) + 1
+        ds = 0.8/len(agents)
+        ax.bar(x+i*ds-0.8/2, meanRewards[name], ds, align="edge", label=name, color=colours[i])
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=6)
+    plt.savefig("./Figures/comparativeEvaluation_meanRewards_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
+
+    # Compare rewards from the variant with the highest mean.
     fig, ax = plt.subplots()
     ax.set_xlabel("Episode")
     ax.set_ylabel("Reward")
-    x = np.array(range(nEpisodesEval))
+    x = np.array(range(nEpisodesEval)) + 1
     ds = 0.8/len(agentSaves)
     rewardMax = -1e6
     rewardMin = 1e6
@@ -79,23 +111,23 @@ if __name__ == "__main__":
         ax.bar(x+i*ds, allRewards[name], ds, align="edge", label=name, color=colours[i])
         if np.max(allRewards[name]) > rewardMax:
             rewardMax = np.max(allRewards[name])
-        if np.min(allRewards[name]) < rewardMin:
+        if np.min(allRewards[name]) < rewardMin and np.min(allRewards[name]) > 0:
             rewardMin = np.min(allRewards[name])
-    xlim = ax.get_xlim()
-    for i, name in enumerate(agentSaves):
-        ax.plot(xlim, [meanRewards[name]]*2, "--", c=colours[i], lw=4, alpha=0.5)
-    ax.plot(xlim, [0]*2, "k-", lw=1)
-    ax.set_xlim(xlim)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=4)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=6)
 
     # Plot reward distributions.
     fig, ax = plt.subplots()
     ax.set_xlabel("Evaluation reward distribution")
     ax.set_ylabel("Episode count")
-    bins = np.linspace(rewardMin, rewardMax, 21)
+    bins = np.linspace(rewardMin, rewardMax, 11)
     x = (bins[1:] + bins[:-1])/2
     ds = (x[1]-x[0])*0.8/len(agentSaves)
     for i, name in enumerate(agentSaves):
         h, _ = np.histogram(allRewards[name], bins=bins)
-        plt.bar(x+i*ds, h, color=colours[i], alpha=1, label=name, width=ds)
+        ax.plot(x, h, c=colours[i], lw=3, label=name)
+        ax.fill_between(x, np.zeros_like(h), h, color=colours[i], alpha=0.25)
+
+        # ax.plot(np.append(x, x[-1]+(x[-1]-x[-2])), np.append(h, 0), c=colours[i], lw=3, label=name)
+        # plt.bar(x+i*ds, h, color=colours[i], alpha=1, label=name, width=ds)
     ax.legend()
+    plt.savefig("./Figures/comparativeEvaluation_rewardDist_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
