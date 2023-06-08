@@ -38,7 +38,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "TQC_try1"
+    agentName = "TQC_try0"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     # --- Training parameters ---
     loadReplayBuffer = True  # For a "perfect" restart keep this on.
     agentToRestart = None
-    # agentToRestart = "SAC_try8_forRestart_0"
+    # agentToRestart = "TQC_try0_0"
 
     # No. parallel processes.
     nProc = 16
@@ -63,8 +63,8 @@ if __name__ == "__main__":
     # Any found agent will be left alone unless this is set to true.
     overwrite = False
 
-    nTrainingSteps = 1_500_000
-    # nTrainingSteps = 500_000
+    # nTrainingSteps = 1_500_000
+    nTrainingSteps = 500_000
 
     agent_kwargs = {
         'gamma': 0.95,
@@ -85,7 +85,7 @@ if __name__ == "__main__":
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.05*np.ones(3)), nProc),
 
-        # Special for RecurrentPPO
+        # Special for RecurrentPPO - lower LR needed for stable-ish learning.
         # 'learning_rate': 5e-4,
     }
     policy_kwargs = {
@@ -147,7 +147,8 @@ if __name__ == "__main__":
 
             else:
                 agent = sb3_contrib.TQC.load("./agentData/{}".format(agentToRestart),
-                                             env=env, force_reset=False)
+                                             env=env)#, force_reset=False)
+                agent.set_parameters("./agentData/{}".format(agentToRestart))
                 if loadReplayBuffer:
                     agent.load_replay_buffer("./agentData/{}_replayBuffer".format(agentToRestart))
 
