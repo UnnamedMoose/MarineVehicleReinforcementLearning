@@ -38,13 +38,22 @@ if __name__ == "__main__":
         "noiseMagCoeffs": 0.,
     }
 
-    comparisonLabel = "differentAgents"
+    saveFigs = True
+
+    # comparisonLabel = "differentAgents"
+    # agentSaves = {
+    #     "SAC": "SAC_try9",
+    #     "DDPG": "DDPG_try0",
+    #     "TD3": "TD3_try0",
+    #     "LSTM PPO": "RecurrentPPO_try0",
+    #     "TQC": "TQC_try0",
+    # }
+
+    comparisonLabel = "experienceTransformation"
     agentSaves = {
         "SAC": "SAC_try9",
-        "DDPG": "DDPG_try0",
-        "TD3": "TD3_try0",
         "TQC": "TQC_try0",
-        "LSTM PPO": "RecurrentPPO_try0",
+        "TQC+experience transformations": "TQC_customBuffer_try0",
     }
 
     env_eval = auv.AuvEnv(**env_kwargs_evaluation)
@@ -59,14 +68,16 @@ if __name__ == "__main__":
 
         print("\n{} - evaluating {:d} versions".format(name, len(files)))
 
+        classDict = {
+            "SAC": stable_baselines3.SAC,
+            "DDPG": stable_baselines3.DDPG,
+            "TD3": stable_baselines3.TD3,
+            "LSTM PPO": sb3_contrib.RecurrentPPO,
+            "TQC": sb3_contrib.TQC,
+            "TQC+experience transformations": sb3_contrib.TQC,
+        }
+
         for i, filename in enumerate(files):
-            classDict = {
-                "SAC": stable_baselines3.SAC,
-                "DDPG": stable_baselines3.DDPG,
-                "TD3": stable_baselines3.TD3,
-                "TQC": sb3_contrib.TQC,
-                "LSTM PPO": sb3_contrib.RecurrentPPO,
-            }
             agents[name] = classDict[name].load("./agentData/{}".format(filename))
 
             meanReward, allReward = resources.evaluate_agent(
@@ -97,7 +108,8 @@ if __name__ == "__main__":
         ds = 0.8/len(agents)
         ax.bar(x+i*ds-0.8/2, meanRewards[name], ds, align="edge", label=name, color=colours[i])
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=6)
-    plt.savefig("./Figures/comparativeEvaluation_meanRewards_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
+    if saveFigs:
+        plt.savefig("./Figures/comparativeEvaluation_meanRewards_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
 
     # Compare rewards from the variant with the highest mean.
     fig, ax = plt.subplots()
@@ -129,5 +141,6 @@ if __name__ == "__main__":
 
         # ax.plot(np.append(x, x[-1]+(x[-1]-x[-2])), np.append(h, 0), c=colours[i], lw=3, label=name)
         # plt.bar(x+i*ds, h, color=colours[i], alpha=1, label=name, width=ds)
-    ax.legend()
-    plt.savefig("./Figures/comparativeEvaluation_rewardDist_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=6)
+    if saveFigs:
+        plt.savefig("./Figures/comparativeEvaluation_rewardDist_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")

@@ -63,8 +63,8 @@ if __name__ == "__main__":
     # Any found agent will be left alone unless this is set to true.
     overwrite = False
 
-    # nTrainingSteps = 1_500_000
-    nTrainingSteps = 500_000
+    nTrainingSteps = 1_500_000
+    # nTrainingSteps = 500_000
 
     agent_kwargs = {
         'gamma': 0.95,

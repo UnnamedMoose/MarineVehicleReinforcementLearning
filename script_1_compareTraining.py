@@ -22,7 +22,9 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 # %% Load
 
-comparisonLabel = "differentAgents"
+saveFigs = True
+# comparisonLabel = "differentAgents"
+comparisonLabel = "experienceTransformation"
 nRolling = 500
 
 trainings = {
@@ -56,10 +58,12 @@ trainings = {
     # "LR 2e-3, ent. target -1.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-1.0_ent_coef_auto",
     # "LR 2e-3, ent. target -8.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-8.0_ent_coef_auto",
 
-    "DDPG": "DDPG_try0",
-    "TD3": "TD3_try0",
+    # "DDPG": "DDPG_try0",
+    # "TD3": "TD3_try0",
+    # "LSTM PPO": "RecurrentPPO_try0",
     "TQC": "TQC_try0",
-    "LSTM PPO": "RecurrentPPO_try0",
+
+    "TQC+experience transformations": "TQC_customBuffer_try0",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
@@ -103,4 +107,5 @@ for i, t in enumerate(trainings):
     # ax[0].plot(data[kBest]["r"], "b-", lw=4, alpha=0.25)
     lns += ln
 fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=6, framealpha=1)
-plt.savefig("./Figures/trainingComparison_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
+if saveFigs:
+    plt.savefig("./Figures/trainingComparison_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
