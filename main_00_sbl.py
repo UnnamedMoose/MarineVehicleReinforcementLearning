@@ -38,7 +38,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "TQC_try0"
+    agentName = "TQC_try1"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -136,6 +136,7 @@ if __name__ == "__main__":
 
             # Create the agent using stable baselines.
             if agentToRestart is None:
+                # agent = stable_baselines3.DDPG("MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
                 agent = sb3_contrib.TQC("MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
                 # agent = sb3_contrib.RecurrentPPO("MlpLstmPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
 

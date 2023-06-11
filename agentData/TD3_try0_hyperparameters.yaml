@@ -38,4 +38,4 @@ policy_kwargs:
     - 128
     - 128
 trainingTime:
-- 2129.168267
+- 3315.098242

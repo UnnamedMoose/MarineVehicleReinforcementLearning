@@ -72,6 +72,7 @@ class CustomReplayBuffer(ReplayBuffer):
     ):
         super().__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs,
                          optimize_memory_usage=False, handle_timeout_termination=True)
+        self.nRollovers = 0
 
     def add(
         self,
@@ -124,7 +125,24 @@ class CustomReplayBuffer(ReplayBuffer):
             [1., 1., -1.],
         ]
 
+        # Once the buffer gets full-ish, reduce the number of artificially generated
+        # states to zero and only rely on actual data.
+        # if self.full:
+        #     vals = [0]
+        # else:
+        #     nMax = len(transformations_act)-1
+        #     x0 = int(self.buffer_size*0.5)
+        #     dx = int(self.buffer_size*0.5)
+        #     n = max(0, min(nMax, int((self.pos - x0) * -nMax // dx + nMax)))
+        #     vals = np.append([0], 1+np.random.choice(range(nMax), size=n, replace=False))
+
+        # Apply transformations and store the experience.
         for i in range(len(transformations_obs)):
+            # if i not in vals:
+            #     continue
+            # Stop generating synthetic data once the buffer has rolled over a few times.
+            if (self.nRollovers > 5) and (i != 0):
+                continue
             # Copy to avoid modification by reference, apply transformation.
             self.observations[self.pos] = np.array(obs).copy() * transformations_obs[i]
             self.next_observations[self.pos] = np.array(next_obs).copy() * transformations_obs[i]
@@ -139,6 +157,7 @@ class CustomReplayBuffer(ReplayBuffer):
             if self.pos == self.buffer_size:
                 self.full = True
                 self.pos = 0
+                self.nRollovers += 1
 
 
 if __name__ == "__main__":
@@ -146,7 +165,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "TQC_customBuffer_try0"
+    agentName = "TQC_customBuffer_try2"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -163,16 +182,16 @@ if __name__ == "__main__":
     # agentToRestart = "TQC_customBuffer_try0_0"
 
     # No. parallel processes.
-    nProc = 8
+    nProc = 16
 
     # Do everything N times to rule out random successes and failures.
     nAgents = 5
 
     # Any found agent will be left alone unless this is set to true.
-    overwrite = True
+    overwrite = False
 
     nTrainingSteps = 1_500_000
-    # nTrainingSteps = 50_000
+    # nTrainingSteps = 500_000
 
     agent_kwargs = {
         'gamma': 0.95,
@@ -290,7 +309,7 @@ if __name__ == "__main__":
     if do_evaluation:
         # Create the environment and load the best agent to-date.
         env_eval = auv.AuvEnv(**env_kwargs_evaluation)
-        agent = sb3_contrib.TQC("./agentData/{}".format(agentName_eval))
+        agent = sb3_contrib.TQC.load("./agentData/{}".format(agentName_eval))
 
         # Load the hyperparamters as well for demonstration purposes.
         # with open("./agentData/{}_hyperparameters.yaml".format(agentName_eval), "r") as outf:

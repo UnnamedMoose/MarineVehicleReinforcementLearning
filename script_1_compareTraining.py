@@ -22,7 +22,7 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 # %% Load
 
-saveFigs = True
+saveFigs = False
 # comparisonLabel = "differentAgents"
 comparisonLabel = "experienceTransformation"
 nRolling = 500
@@ -63,7 +63,7 @@ trainings = {
     # "LSTM PPO": "RecurrentPPO_try0",
     "TQC": "TQC_try0",
 
-    "TQC+experience transformations": "TQC_customBuffer_try0",
+    "TQC+experience transformations": "TQC_customBuffer_try1",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
