@@ -141,7 +141,7 @@ class CustomReplayBuffer(ReplayBuffer):
             # if i not in vals:
             #     continue
             # Stop generating synthetic data once the buffer has rolled over a few times.
-            if (self.nRollovers > 5) and (i != 0):
+            if (self.nRollovers > 2) and (i != 0):
                 continue
             # Copy to avoid modification by reference, apply transformation.
             self.observations[self.pos] = np.array(obs).copy() * transformations_obs[i]
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "TQC_customBuffer_try2"
+    agentName = "TQC_customBuffer_try5_2proc"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -174,7 +174,7 @@ if __name__ == "__main__":
 
     # Top-level switches
     do_training = True
-    do_evaluation = True
+    do_evaluation = False
 
     # --- Training parameters ---
     loadReplayBuffer = True  # For a "perfect" restart keep this on.
@@ -182,16 +182,16 @@ if __name__ == "__main__":
     # agentToRestart = "TQC_customBuffer_try0_0"
 
     # No. parallel processes.
-    nProc = 16
+    nProc = 2
 
     # Do everything N times to rule out random successes and failures.
-    nAgents = 5
+    nAgents = 3
 
     # Any found agent will be left alone unless this is set to true.
     overwrite = False
 
-    nTrainingSteps = 1_500_000
-    # nTrainingSteps = 500_000
+    # nTrainingSteps = 1_500_000
+    nTrainingSteps = 500_000
 
     agent_kwargs = {
         'gamma': 0.95,
@@ -201,7 +201,7 @@ if __name__ == "__main__":
         'buffer_size': (128*3)*512,
         'learning_starts': 256,
         'train_freq': (1, "step"),
-        "gradient_steps": 1,
+        "gradient_steps": 5,
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.05*np.ones(3)), nProc),
         # Set the custom buffer.

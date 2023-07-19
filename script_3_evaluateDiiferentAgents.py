@@ -40,21 +40,21 @@ if __name__ == "__main__":
 
     saveFigs = True
 
-    comparisonLabel = "differentAgents"
-    agentSaves = {
-        "SAC": "SAC_try9",
-        "DDPG": "DDPG_try0",
-        "TD3": "TD3_try0",
-        "LSTM PPO": "RecurrentPPO_try0",
-        "TQC": "TQC_try0",
-    }
-
-    # comparisonLabel = "experienceTransformation"
+    # comparisonLabel = "differentAgents"
     # agentSaves = {
     #     "SAC": "SAC_try9",
+    #     "DDPG": "DDPG_try0",
+    #     "TD3": "TD3_try0",
+    #     "LSTM PPO": "RecurrentPPO_try0",
     #     "TQC": "TQC_try0",
-    #     "TQC+experience transformations": "TQC_customBuffer_try0",
     # }
+
+    comparisonLabel = "experienceTransformation"
+    agentSaves = {
+        "SAC": "SAC_try9",
+        "TQC": "TQC_try0",
+        "TQC+experience transformations": "TQC_customBuffer_try1",
+    }
 
     env_eval = auv.AuvEnv(**env_kwargs_evaluation)
 

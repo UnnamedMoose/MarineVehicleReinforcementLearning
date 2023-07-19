@@ -22,10 +22,10 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 
 # %% Load
 
-saveFigs = False
-# comparisonLabel = "differentAgents"
-comparisonLabel = "experienceTransformation"
-nRolling = 500
+saveFigs = True
+comparisonLabel = "differentAgents"
+# comparisonLabel = "experienceTransformation"
+nRolling = 200
 
 trainings = {
     # Baseline agent with nothing special.
@@ -58,12 +58,14 @@ trainings = {
     # "LR 2e-3, ent. target -1.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-1.0_ent_coef_auto",
     # "LR 2e-3, ent. target -8.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-8.0_ent_coef_auto",
 
-    # "DDPG": "DDPG_try0",
-    # "TD3": "TD3_try0",
-    # "LSTM PPO": "RecurrentPPO_try0",
+    "DDPG": "DDPG_try0",
+    "TD3": "TD3_try0",
+    "LSTM PPO": "RecurrentPPO_try0",
     "TQC": "TQC_try0",
 
-    "TQC+experience transformations": "TQC_customBuffer_try1",
+    # "TQC+trf": "TQC_customBuffer_try2",
+    # "TQC+trf+N$_{grad}$=3": "TQC_customBuffer_try3",
+    # "TQC+trf+N$_{grad}$=5": "TQC_customBuffer_try4",
 }
 
 colours = plt.cm.nipy_spectral(np.linspace(0., 0.95, len(trainings)))
@@ -77,6 +79,7 @@ for t in trainings:
         data["{} {:d}".format(t, i)] = df[["r", "l"]].rolling(nRolling).mean().dropna()
 
 # %% Plot.
+
 fig, ax = plt.subplots(1, 2, sharex=True, figsize=(14, 8))
 plt.subplots_adjust(top=0.87, bottom=0.12, left=0.1, right=0.98, wspace=0.211)
 # ax[0].set_xlim((nRolling, 1e4))
@@ -107,5 +110,29 @@ for i, t in enumerate(trainings):
     # ax[0].plot(data[kBest]["r"], "b-", lw=4, alpha=0.25)
     lns += ln
 fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=6, framealpha=1)
+
+# Plot just the reward for saving
+
+fig, ax = plt.subplots()
+plt.subplots_adjust(top=0.87, bottom=0.12, left=0.12, right=0.98, wspace=0.211)
+ax.set_xlabel("Episode")
+ax.set_ylabel("Moving average of reward")
+ax.grid(axis="y", linestyle="dashed")
+ax.set_xscale("log")
+
+lns = []
+for i, t in enumerate(trainings):
+    kBest = None
+    for k in data:
+        if t not in k:
+            continue
+        elif kBest is None:
+            kBest = k
+        ln = ax.plot(data[k]["r"], c=colours[i], label=t, lw=2)
+        if np.mean(data[k]["r"].values[-50:]) > np.mean(data[kBest]["r"].values[-50:]):
+            kBest = k
+    lns += ln
+fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=6, framealpha=1)
+
 if saveFigs:
     plt.savefig("./Figures/trainingComparison_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
