@@ -201,7 +201,7 @@ if __name__ == "__main__":
         'buffer_size': (128*3)*512,
         'learning_starts': 256,
         'train_freq': (1, "step"),
-        "gradient_steps": 5,
+        "gradient_steps": 3,
         "action_noise": VectorizedActionNoise(NormalActionNoise(
             np.zeros(3), 0.05*np.ones(3)), nProc),
         # Set the custom buffer.
