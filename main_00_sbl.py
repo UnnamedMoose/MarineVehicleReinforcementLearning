@@ -38,7 +38,7 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # For saving trained agents.
-    agentName = "TQC_try1"
+    agentName = "ARS_try0"
 
     # Set to None to pick the best agent from the trained set. Specify as string
     # to load a particular saved model.
@@ -67,33 +67,43 @@ if __name__ == "__main__":
     # nTrainingSteps = 500_000
 
     agent_kwargs = {
-        'gamma': 0.95,
         'verbose': 1,
-        'batch_size': 256,
 
-        # SAC-specific
+        # Not included in ARS
+        # 'gamma': 0.95,
+        # 'batch_size': 256,
+        # "gradient_steps": 1,
+
+        # Not included in ARS or RecurrentPPO
+        # 'buffer_size': (128*3)*512,
+        # 'learning_rate': 2e-3,
+        # 'learning_starts': 256,
+        # 'train_freq': (1, "step"),
+        # "action_noise": VectorizedActionNoise(NormalActionNoise(
+        #     np.zeros(3), 0.05*np.ones(3)), nProc),
+
+        # Special for SAC
         # "use_sde_at_warmup": False,
         # "target_entropy": "auto",
         # "ent_coef": "auto",
 
-        # Not included in RecurrentPPO
-        'learning_rate': 2e-3,
-        'buffer_size': (128*3)*512,
-        'learning_starts': 256,
-        'train_freq': (1, "step"),
-        "gradient_steps": 1,
-        "action_noise": VectorizedActionNoise(NormalActionNoise(
-            np.zeros(3), 0.05*np.ones(3)), nProc),
+        # Special for ARS
+        "n_delta": 8,
+        "n_top": 8,
+        "delta_std": 0.05,
+        "alive_bonus_offset": 0,
 
         # Special for RecurrentPPO - lower LR needed for stable-ish learning.
         # 'learning_rate': 5e-4,
     }
     policy_kwargs = {
         "activation_fn": torch.nn.GELU,
-        "net_arch": dict(
-            pi=[128, 128, 128],
-            qf=[128, 128, 128],
-        ),
+        # "net_arch": dict(
+        #     pi=[128, 128, 128],
+        #     qf=[128, 128, 128],
+        # ),
+        # Special for ARS
+        "net_arch": [128, 128, 128],
     }
     env_kwargs = {
         # Set to zero to disable the flow - much faster training.
@@ -137,7 +147,7 @@ if __name__ == "__main__":
             # Create the agent using stable baselines.
             if agentToRestart is None:
                 # agent = stable_baselines3.DDPG("MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
-                agent = sb3_contrib.TQC("MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
+                agent = sb3_contrib.ARS("MlpPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
                 # agent = sb3_contrib.RecurrentPPO("MlpLstmPolicy", env, policy_kwargs=policy_kwargs, **agent_kwargs)
 
             else:

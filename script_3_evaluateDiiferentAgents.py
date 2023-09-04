@@ -38,28 +38,30 @@ if __name__ == "__main__":
         "noiseMagCoeffs": 0.,
     }
 
-    saveFigs = True
+    saveFigs = False
 
-    # comparisonLabel = "differentAgents"
-    # agentSaves = {
-    #     "SAC": "SAC_try9",
-    #     "DDPG": "DDPG_try0",
-    #     "TD3": "TD3_try0",
-    #     "LSTM PPO": "RecurrentPPO_try0",
-    #     "TQC": "TQC_try0",
-    # }
-
-    comparisonLabel = "experienceTransformation"
+    comparisonLabel = "differentAgents"
     agentSaves = {
         "SAC": "SAC_try9",
+        "DDPG": "DDPG_try0",
+        "TD3": "TD3_try0",
+        "LSTM PPO": "RecurrentPPO_try0",
         "TQC": "TQC_try0",
-        "TQC+experience transformations": "TQC_customBuffer_try1",
+        "ARS": "ARS_try0",
     }
+
+    # comparisonLabel = "experienceTransformation"
+    # agentSaves = {
+    #     "SAC": "SAC_try9",
+    #     "TQC": "TQC_try0",
+    #     "TQC+experience transformations": "TQC_customBuffer_try1",
+    # }
 
     env_eval = auv.AuvEnv(**env_kwargs_evaluation)
 
     agents = {}
     meanRewards = {}
+    medianRewards = {}
     allRewards = {}
     bestVersions = {}
     for name in agentSaves:
@@ -80,13 +82,15 @@ if __name__ == "__main__":
         for i, filename in enumerate(files):
             agents[name] = classDict[name].load("./agentData/{}".format(filename))
 
-            meanReward, allReward = resources.evaluate_agent(
+            meanReward, medianReward, allReward = resources.evaluate_agent(
                 agents[name], env_eval, num_episodes=nEpisodesEval)
 
             if name not in meanRewards:
                 meanRewards[name] = [meanReward]
+                medianRewards[name] = [medianReward]
             else:
                 meanRewards[name] = np.append(meanRewards[name], meanReward)
+                medianRewards[name] = np.append(medianRewards[name], medianReward)
 
             if name not in allRewards:
                 allRewards[name] = allReward
@@ -102,7 +106,7 @@ if __name__ == "__main__":
     # Compare mean rewards for all variants of each agent.
     fig, ax = plt.subplots()
     ax.set_xlabel("Agent variant")
-    ax.set_ylabel("Reward")
+    ax.set_ylabel("Mean reward")
     for i, name in enumerate(agents):
         x = np.array(range(len(meanRewards[name]))) + 1
         ds = 0.8/len(agents)
@@ -110,6 +114,18 @@ if __name__ == "__main__":
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=6)
     if saveFigs:
         plt.savefig("./Figures/comparativeEvaluation_meanRewards_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
+
+    # Compare median rewards for all variants of each agent.
+    fig, ax = plt.subplots()
+    ax.set_xlabel("Agent variant")
+    ax.set_ylabel("Median reward")
+    for i, name in enumerate(agents):
+        x = np.array(range(len(medianRewards[name]))) + 1
+        ds = 0.8/len(agents)
+        ax.bar(x+i*ds-0.8/2, medianRewards[name], ds, align="edge", label=name, color=colours[i])
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=6)
+    if saveFigs:
+        plt.savefig("./Figures/comparativeEvaluation_medianRewards_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
 
     # Compare rewards from the variant with the highest mean.
     fig, ax = plt.subplots()
