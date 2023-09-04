@@ -68,13 +68,15 @@ def evaluate_agent(agent, env, num_episodes=1, num_steps=None, deterministic=Tru
             all_episode_rewards.append(np.mean(episode_rewards[-num_last_for_reward:], 1))
 
     mean_episode_reward = np.mean(all_episode_rewards)
-    print("  Mean reward:", mean_episode_reward)
-    print("  Num episodes:", num_episodes)
+    median_episode_reward = np.median(all_episode_rewards)
+    print("  Mean reward:  ", mean_episode_reward)
+    print("  Median reward:", median_episode_reward)
+    print("  Num episodes: ", num_episodes)
 
     if render:
-        return frames, mean_episode_reward, all_episode_rewards
+        return frames, mean_episode_reward, median_episode_reward, all_episode_rewards
     else:
-        return mean_episode_reward, all_episode_rewards
+        return mean_episode_reward, median_episode_reward, all_episode_rewards
 
 
 def plot_horizontal(ax, x, y, psi, scale=1, markerSize=1, arrowSize=1, vehicleColour="y", alpha=0.5):
@@ -138,7 +140,7 @@ def plot_horizontal(ax, x, y, psi, scale=1, markerSize=1, arrowSize=1, vehicleCo
     return objects
 
 
-def plotEpisode(env_to_plot, title=""):
+def plotEpisode(env_to_plot, title="", plotHeading=True, plotWaypoints=True):
 
     # TODO this shares a lot of code with animateEpisode. Could just use the latter
 
@@ -163,12 +165,14 @@ def plotEpisode(env_to_plot, title=""):
 
     lns = []
 
-    lns += ax.plot([env_to_plot.positionStart[i0], env_to_plot.positionTarget[i0]],
-                    [env_to_plot.positionStart[i1], env_to_plot.positionTarget[i1]],
-                    "go--", lw=2, ms=8, mew=2, mec="g", mfc="None", label="$Waypoints$")
+    if plotWaypoints:
+        lns += ax.plot([env_to_plot.positionStart[i0], env_to_plot.positionTarget[i0]],
+                        [env_to_plot.positionStart[i1], env_to_plot.positionTarget[i1]],
+                        "go--", lw=2, ms=8, mew=2, mec="g", mfc="None", label="$Waypoints$")
 
     xyHeading = 0.5*np.cos(env_to_plot.headingTarget), 0.5*np.sin(env_to_plot.headingTarget)
-    ax.plot([0, xyHeading[i0]], [0, xyHeading[i1]], "g-", lw=4, alpha=0.5)
+    if plotHeading:
+        ax.plot([0, xyHeading[i0]], [0, xyHeading[i1]], "g-", lw=4, alpha=0.5)
 
     lns += ax.plot(env_to_plot.timeHistory[["x", "y"]].values[0, i0], env_to_plot.timeHistory[["x", "y"]].values[0, i1],
             "bs", ms=11, mew=2, mec="b", mfc="None", label="$Start$")
