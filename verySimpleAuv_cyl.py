@@ -16,7 +16,8 @@ import gym
 from gym.utils import seeding
 
 import flowGenerator
-from verySimpleAuv import headingError, PDController
+from verySimpleAuv import PDController
+from resources import headingError
 
 class AuvEnvCyl(gym.Env):
     def __init__(self, seed=None, dt=0.02, noiseMagCoeffs=0.0, noiseMagActuation=0.0,

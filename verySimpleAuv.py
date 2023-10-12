@@ -16,6 +16,7 @@ import gym
 from gym.utils import seeding
 
 import flowGenerator
+from resources import headingError
 
 
 class PDController(object):
@@ -49,27 +50,27 @@ class PDController(object):
         return np.clip(actions, -1., 1.), states
 
 
-def headingError(psi_d, psi):
-    """
-    Function used for computing signed heading error that wraps around pi properly.
+# def headingError(psi_d, psi):
+#     """
+#     Function used for computing signed heading error that wraps around pi properly.
 
-    Parameters
-    ----------
-    psi_d : float
-        Target heading in radians <0, 2pi).
-    psi : float
-        Current heading in radians <0, 2pi).
+#     Parameters
+#     ----------
+#     psi_d : float
+#         Target heading in radians <0, 2pi).
+#     psi : float
+#         Current heading in radians <0, 2pi).
 
-    Returns
-    -------
-    diff : float
-        Signed difference in radians <-pi, pi).
+#     Returns
+#     -------
+#     diff : float
+#         Signed difference in radians <-pi, pi).
 
-    """
-    a = (psi_d - psi) % (2.*np.pi)
-    b = (psi - psi_d) % (2.*np.pi)
-    diff = a if a < b else -b
-    return diff
+#     """
+#     a = (psi_d - psi) % (2.*np.pi)
+#     b = (psi - psi_d) % (2.*np.pi)
+#     diff = a if a < b else -b
+#     return diff
 
 
 class AuvEnv(gym.Env):

@@ -23,6 +23,29 @@ import yaml
 orientation = "right_up_anticlockwise"
 
 
+def headingError(psi_d, psi):
+    """
+    Function used for computing signed heading error that wraps around pi properly.
+
+    Parameters
+    ----------
+    psi_d : float
+        Target heading in radians <0, 2pi).
+    psi : float
+        Current heading in radians <0, 2pi).
+
+    Returns
+    -------
+    diff : float
+        Signed difference in radians <-pi, pi).
+
+    """
+    a = (psi_d - psi) % (2.*np.pi)
+    b = (psi - psi_d) % (2.*np.pi)
+    diff = a if a < b else -b
+    return diff
+
+
 def evaluate_agent(agent, env, num_episodes=1, num_steps=None, deterministic=True,
                    num_last_for_reward=None, render=False, init=None, saveDir=None):
     """

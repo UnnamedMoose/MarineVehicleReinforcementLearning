@@ -20,138 +20,17 @@ font = {"family": "serif",
 matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
-# %% Simple example of a Lorenz attractor
-"""
-def lorenz(t, state, sigma, beta, rho):
-    x, y, z = state
-
-    dx = sigma * (y - x)
-    dy = x * (rho - z) - y
-    dz = x * y - beta * z
-
-    return [dx, dy, dz]
-
-sigma = 10.0
-beta = 8.0 / 3.0
-rho = 28.0
-
-p = (sigma, beta, rho)  # Parameters of the system
-
-y0 = [1.0, 1.0, 1.0]  # Initial state of the system
-
-t_span = (0.0, 40.0)
-t = np.arange(0.0, 40.0, 0.01)
-
-result_solve_ivp = scipy.integrate.solve_ivp(lorenz, t_span, y0, args=p, method='LSODA', t_eval=t)  # or RK45
-
-fig = plt.figure()
-ax = fig.add_subplot(1, 1, 1, projection='3d')
-ax.plot(result_solve_ivp.y[0, :],
-        result_solve_ivp.y[1, :],
-        result_solve_ivp.y[2, :])
-ax.set_title("solve_ivp")
-"""
-
-# %% DDR
-
-"""
-class ddr:
-    def __init__(self, waypoint):
-        # ===
-        # Physical properties
-        self.L = 0.2  # Wheelbase
-        self.R = 0.05  # Wheel radius
-
-        # Target.
-        self.waypoint = np.array(waypoint)
-
-        # Old error for controller.
-        self.eOld = None
-        self.eInt = 0.
-        self.tOld = 0.
-
-    def derivs(self, t, state):
-        x, y, psi = state
-
-        # ===
-        # Compute control variables.
-        # Direction to waypoint
-        vecToWaypoint = self.waypoint - [x, y]
-        dToWaypoint = np.sqrt(np.sum(vecToWaypoint**2.))
-
-        # Convert control vector to heading.
-        psi_d = np.arctan2(vecToWaypoint[1], vecToWaypoint[0])
-
-        # ---
-        # Heading error, bounded to (-pi, pi>
-        if self.eOld is None:
-            self.eOld = psi_d - psi
-        K_P = 0.5
-        K_I = 0.02
-        K_D = 0.02
-        e = psi_d - psi
-        e = np.arctan2(np.sin(e), np.cos(e))
-        dedt = (e - self.eOld) / max(1e-9, t - self.tOld)
-        self.eInt += 0.5*(self.eOld + e) * (t - self.tOld)
-        omegaD = max(-0.5, min(0.5, K_P*e + K_D*dedt + K_I*self.eInt))
-        self.eOld = e
-        self.tOld = t
-
-        # TODO add speed control
-        uD = 0.2
-        if dToWaypoint < 0.1:
-            uD = 0.2*dToWaypoint/0.1
-
-        # NOTE: inverted here to match yx projection with x +ve North!!!
-        omega_r = (2.*uD - omegaD/self.L) / (2.*self.R)
-        omega_l = (2.*uD + omegaD/self.L) / (2.*self.R)
-
-        # ===
-        # Velocities in the robot's reference frame.
-        u = self.R * (omega_r + omega_l)/2.
-        # NOTE: inverted here for +ve omega with increasing heading
-        omega = self.R/self.L * (omega_r - omega_l) * -1
-
-        # ===
-        # Apply a coordinate transformation to get displacement rates in the global coordinates.
-        vel = np.array([u, 0., omega])
-        coordTransform = np.array([
-            [np.cos(psi), -np.sin(psi), 0.],
-            [np.sin(psi), np.cos(psi), 0.],
-            [0., 0., 1.],
-        ])
-        vel = np.dot(coordTransform, vel)
-
-        # Return the derivatives of the system.
-        return vel
-
-state0 = np.array([0., 0., 45./180.*np.pi])
-robot = ddr([0.6, 0.3])
-t_span = (0.0, 25.0)
-t = np.arange(0.0, 25.0, 0.01)
-
-result_solve_ivp = scipy.integrate.solve_ivp(robot.derivs, t_span, state0,# args=p,
-                                             method='RK45', t_eval=t)  # or RK45
-
-fig, ax  = plt.subplots()
-ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
-ax.plot(robot.waypoint[0], robot.waypoint[1], "ko", label="Waypoint")
-ax.set_aspect("equal")
-ax.legend()
-"""
+from resources import headingError
 
 # %% BlueROV 2 Heavy
 
-class brov:
-    def __init__(self, waypoint, dt):
-        self.dt = dt
-        self.nextSaveTime = 0
-        self.savedData = []
+class BlueROV2Heavy3DoF:
+    def __init__(self, waypoint):
 
         # Target.
         self.waypoint = np.array(waypoint)
 
-        # Old error for controller.
+        # Stuff for the PID controller.
         self.eOld = None
         self.eInt = np.zeros(3)
         self.tOld = 0.
@@ -209,7 +88,7 @@ class brov:
         # Thruster.
         self.D_thruster = 0.1 # Diameter of thrusters # +++
         self.alphaThruster = 45./180.*np.pi # Angle between thruster axes and centreline (0 fwd)
-        self.l_x = 0.156 # Moment arms [m] # +++ # TODO use these for model validation only.
+        self.l_x = 0.156 # Moment arms [m] # +++ # NOTE use these for model validation only.
         self.l_y = 0.111
         # Back-calculated from max rpm at 16 V from datasheet:
         # https://bluerobotics.com/store/thrusters/t100-t200-thrusters/t200-thruster/
@@ -260,8 +139,7 @@ class brov:
         K_P = np.array([20., 20., 20.])
         K_I = np.array([0.1, 0.1, 0.1])
         K_D = np.array([5., 5., 0.5])
-        e = self.waypoint - [x, y, psi]
-        e[2] = np.arctan2(np.sin(e[2]), np.cos(e[2]))
+        e = np.append(self.waypoint[:2] - [x, y], headingError(self.waypoint[2], psi))
         if self.eOld is None:
             self.eOld = e.copy()
         dedt = (e - self.eOld) / max(1e-9, t - self.tOld)
@@ -294,7 +172,7 @@ class brov:
         rpmFS = limit(cv[2])
         rpmAS = limit(cv[3])
 
-        # TODO
+        # TODO add a current model
         velCurrent = np.zeros(3)
 
         # Resolve the current into the vehicle reference frame.
@@ -365,8 +243,8 @@ class brov:
 
         # ===
         # Hydrodynamic forces excluding added mass terms.
-        self.useTrueMomentArms = False
-        self.useJetDragAugment = False
+        self.useTrueMomentArms = True
+        self.useJetDragAugment = True
 
         if self.useJetDragAugment:
             Xh = X_FP + X_AP + X_FS + X_AS + (F_FP + F_AP - F_FS - F_AS)*np.cos(self.alphaThruster)
@@ -405,13 +283,6 @@ class brov:
         vel = np.dot(Jtransform, vel)
 
         # ===
-        # Store additional data
-        if np.abs(t - self.nextSaveTime) < 1e-4:
-            self.nextSaveTime += self.dt
-            self.savedData.append([t, controlValues[0], controlValues[1], controlValues[2]])
-            print("now", t)
-
-        # ===
         # Return derivatives of the system along each degree of freedom. The first
         # part of the derivative vector are the rates of change of position in the
         # global reference frame; the second part are the accelerations,
@@ -419,35 +290,35 @@ class brov:
         # in the body reference frame.
         return np.append(vel, acc)
 
-dt = 0.25
-rov = brov([0.6, 0.3, 45./180.*np.pi], dt)
 
-state0 = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
-tMax = 15.
-t = np.arange(0.0, tMax, dt)
+if __name__ == "__main__":
+    # Constants and initial conditions
+    dt = 0.25
+    state0 = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
+    tMax = 15.
+    t = np.arange(0.0, tMax, dt)
 
-result_solve_ivp = scipy.integrate.solve_ivp(
-    rov.derivs, (0, tMax), state0, method='RK45', t_eval=t,
-    rtol=1e-3, atol=1e-3)#args=p,
-    # rtol=1e-3, atol=1e-6)#args=p,
+    # Set up the vehicle with a single waypoint and desired heading
+    rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
 
-fig, ax  = plt.subplots()
-ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
-ax.plot(rov.waypoint[0], rov.waypoint[1], "ko", label="Waypoint")
-ax.set_aspect("equal")
-ax.legend()
+    # Advance in time
+    result_solve_ivp = scipy.integrate.solve_ivp(
+        rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
 
-fig, ax  = plt.subplots()
-ax.set_xlim((0, tMax))
-for i, v in enumerate(["x", "y", "psi"]):
-    ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-    ax.hlines(rov.waypoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
-ax.legend()
+    # Sort out the computed heading.
+    result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
 
-controlValues = np.array(rov.savedData)
-fig, ax  = plt.subplots()
-ax.set_xlim((0, tMax))
-ax.hlines(0, 0, tMax, color="k", linestyle="dashed")
-for i, v in enumerate(["x", "y", "psi"]):
-    ln, = ax.plot(controlValues[:, 0], controlValues[:, i+1], label="u_"+v)
-ax.legend()
+    # Plot trajectory
+    fig, ax  = plt.subplots()
+    ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
+    ax.plot(rov.waypoint[0], rov.waypoint[1], "ko", label="Waypoint")
+    ax.set_aspect("equal")
+    ax.legend()
+
+    # Plot individual DoFs
+    fig, ax  = plt.subplots()
+    ax.set_xlim((0, tMax))
+    for i, v in enumerate(["x", "y", "psi"]):
+        ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
+        ax.hlines(rov.waypoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+    ax.legend()
