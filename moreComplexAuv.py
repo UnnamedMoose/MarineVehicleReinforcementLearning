@@ -12,6 +12,7 @@ import os
 import re
 from mpl_toolkits.mplot3d import Axes3D
 import scipy.integrate
+import gym
 
 font = {"family": "serif",
         "weight": "normal",
@@ -291,34 +292,137 @@ class BlueROV2Heavy3DoF:
         return np.append(vel, acc)
 
 
+class BlueROV2Heavy3DoFEnv(gym.Env):
+    def __init__(self, seed=None, dt=0.2, maxSteps=250):
+        self.dt = dt
+
+        # Call base class constructor.
+        super(BlueROV2Heavy3DoFEnv, self).__init__()
+        self.seed = seed
+
+        self._max_episode_steps = maxSteps
+
+    def dataToState(self, systemState):
+        # TODO need to translate the system state (positions, velocities, etc.)
+        # into the RL agent's state.
+        return np.zeros(1)
+
+    def reset(self, keepTimeHistory=False, applyNoise=True, fixedInitialValues=None):
+        if self.seed is not None:
+            self._np_random, self.seed = gym.utils.seeding.np_random(self.seed)
+
+        self.iStep = 0
+        self.time = 0.
+
+        # === Create the object for solving the system dynamics ===
+        # TODO make this randomised.
+        self.systemState = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
+
+        # Set up the vehicle with a single waypoint and desired heading
+        # TODO make this randomised.
+        self.rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
+
+        # Store the time history of system states and other data.
+        self.timeHistory = [np.append(self.time, self.systemState)]
+
+        # Create the initial RL state.
+        self.state = self.dataToState(self.systemState)
+
+        return self.state
+
+    def step(self, action):
+        # Set new time.
+        self.iStep += 1
+        self.time += self.dt
+
+        # Advance in time
+        result_solve_ivp = scipy.integrate.solve_ivp(
+            self.rov.derivs, (self.time-self.dt, self.time), self.systemState,
+            method='RK45', t_eval=np.array([self.time]), max_step=self.dt, rtol=1e-3, atol=1e-3)
+
+        # Sort out the computed heading.
+        result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
+
+        # Store the dynamical system state.
+        self.systemState = result_solve_ivp.y[:, -1]
+
+        # Extract RL state at the new time level.
+        self.state = self.dataToState(self.systemState)
+
+        # Check if max episode length reached.
+        done = False
+        if self.iStep >= self._max_episode_steps:
+            done = True
+
+        reward = 0.
+
+        # Store and tidy up the data when done.
+        self.timeHistory.append(np.append(self.time, self.systemState))
+        if done:
+            self.timeHistory = pandas.DataFrame(
+                data=np.array(self.timeHistory),
+                columns=["t"]+[f"x{i:d}" for i in range(6)])
+
+        if done:
+            self.steps_beyond_done += 1
+        else:
+            self.steps_beyond_done = 0
+
+        return self.state, reward, done, {}
+
 if __name__ == "__main__":
-    # Constants and initial conditions
-    dt = 0.25
-    state0 = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
-    tMax = 15.
-    t = np.arange(0.0, tMax, dt)
 
-    # Set up the vehicle with a single waypoint and desired heading
-    rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
+    # === Test the dynamics ===
 
-    # Advance in time
-    result_solve_ivp = scipy.integrate.solve_ivp(
-        rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
+    # # Constants and initial conditions
+    # dt = 0.25
+    # state0 = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
+    # tMax = 15.
+    # t = np.arange(0.0, tMax, dt)
 
-    # Sort out the computed heading.
-    result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
+    # # Set up the vehicle with a single waypoint and desired heading
+    # rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
+
+    # # Advance in time
+    # result_solve_ivp = scipy.integrate.solve_ivp(
+    #     rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
+
+    # # Sort out the computed heading.
+    # result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
+
+    # # Plot trajectory
+    # fig, ax  = plt.subplots()
+    # ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
+    # ax.plot(rov.waypoint[0], rov.waypoint[1], "ko", label="Waypoint")
+    # ax.set_aspect("equal")
+    # ax.legend()
+
+    # # Plot individual DoFs
+    # fig, ax  = plt.subplots()
+    # ax.set_xlim((0, tMax))
+    # for i, v in enumerate(["x", "y", "psi"]):
+    #     ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
+    #     ax.hlines(rov.waypoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+    # ax.legend()
+
+    # === Test the environment ===
+    env = BlueROV2Heavy3DoFEnv(maxSteps=100)
+    env.reset()
+
+    for i in range(100):
+        env.step([0.])
 
     # Plot trajectory
     fig, ax  = plt.subplots()
-    ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
-    ax.plot(rov.waypoint[0], rov.waypoint[1], "ko", label="Waypoint")
+    ax.plot(env.timeHistory["x0"], env.timeHistory["x1"], "r", label="Trajectory")
+    ax.plot(env.rov.waypoint[0], env.rov.waypoint[1], "ko", label="Waypoint")
     ax.set_aspect("equal")
     ax.legend()
 
     # Plot individual DoFs
     fig, ax  = plt.subplots()
-    ax.set_xlim((0, tMax))
+    ax.set_xlim((0, env.timeHistory["t"].max()))
     for i, v in enumerate(["x", "y", "psi"]):
-        ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-        ax.hlines(rov.waypoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+        ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"{i:d}"], label=v)
+        ax.hlines(env.rov.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
     ax.legend()
