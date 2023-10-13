@@ -96,7 +96,7 @@ class BlueROV2Heavy3DoF:
         # And 40 N measured by Wu (2018) - pp. 49
         self.Kt_thruster = 40. / (1000. * (3500./60.)**2. * self.D_thruster**4.) # +++
 
-        # Generalised control forces and moments.
+        # Generalised control forces and moments - X Y N
         self.generalisedControlForces = np.zeros(3)
         # Motor rpms - FP AP FS AS
         self.controlVector = np.zeros(4)
@@ -305,15 +305,15 @@ class BlueROV2Heavy3DoF:
         x0 = np.array([x, y])
 
         xyHull = np.array([
-            [self.Length/2.,                            -self.Width/2.+self.D_thruster],
-            [self.Length/2.,                             self.Width/2.-self.D_thruster],
-            [self.Length/2.-self.D_thruster,          self.Width/2.],
-            [-self.Length/2.+self.D_thruster,      self.Width/2.],
-            [-self.Length/2.,                          self.Width/2.-self.D_thruster],
-            [-self.Length/2.,                        -self.Width/2.+self.D_thruster],
-            [-self.Length/2.+self.D_thruster,        -self.Width/2.],
-            [self.Length/2.-self.D_thruster,         -self.Width/2.],
-            [self.Length/2.,                            -self.Width/2.+self.D_thruster],
+            [self.Length/2.,                  -self.Width/2.+self.D_thruster],
+            [self.Length/2.,                   self.Width/2.-self.D_thruster],
+            [self.Length/2.-self.D_thruster,   self.Width/2.],
+            [-self.Length/2.+self.D_thruster,  self.Width/2.],
+            [-self.Length/2.,                  self.Width/2.-self.D_thruster],
+            [-self.Length/2.,                 -self.Width/2.+self.D_thruster],
+            [-self.Length/2.+self.D_thruster, -self.Width/2.],
+            [self.Length/2.-self.D_thruster,  -self.Width/2.],
+            [self.Length/2.,                  -self.Width/2.+self.D_thruster],
         ])
 
         xyThrusters = np.array([
@@ -390,7 +390,7 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         # into the RL agent's state.
         return np.zeros(1)
 
-    def reset(self, keepTimeHistory=False, applyNoise=True, fixedInitialValues=None):
+    def reset(self, initialWaypoint=None):
         if self.seed is not None:
             self._np_random, self.seed = gym.utils.seeding.np_random(self.seed)
 
@@ -398,12 +398,20 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         self.time = 0.
 
         # === Create the object for solving the system dynamics ===
-        # TODO make this randomised.
+        # TODO make this randomised?
         self.systemState = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
 
         # Set up the vehicle with a single waypoint and desired heading
-        # TODO make this randomised.
-        self.vehicle = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
+        # TODO make this randomised?
+        # For now start with no desired displacement
+        # and let the agent figure this out on the first call to the step routine.
+        # This can also be overriden when calling reset. Doing so should allow
+        # a dummy agent to be used such that simple A->B behaviour could be simulated.
+        if initialWaypoint is None:
+            wp = [0., 0., 0./180.*np.pi]
+        else:
+            wp = np.array(initialWaypoint)
+        self.vehicle = BlueROV2Heavy3DoF(wp)
 
         # Store the time history of system states and other data.
         self.timeHistory = [np.concatenate([
@@ -418,6 +426,11 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         # Set new time.
         self.iStep += 1
         self.time += self.dt
+
+        # Send action to the dynamics in order to set the new WP and heading demands.
+        psi_d, psi_wp, d_wp = action
+        x_wp = np.array([np.cos(psi_wp), np.sin(psi_wp)])*d_wp + self.systemState[:2]
+        self.vehicle.waypoint = np.append(x_wp, psi_d)
 
         # Advance in time
         result_solve_ivp = scipy.integrate.solve_ivp(
@@ -457,6 +470,26 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
 
         return self.state, reward, done, {}
 
+
+class LOSNavigation(object):
+    """ Simple line-of-sight navigation algorithm that emulates the action of
+    a model used in stable baselines.
+    """
+    def __init__(self):
+        pass
+
+    def predict(self, obs, deterministic=True):
+        # NOTE deterministic is a dummy kwarg needed to make this function look
+        # like a stable baselines equivalent
+        states = obs
+
+        # psi_d, psi_wp, d_wp
+        # TODO scale these to <-1, 1>
+        actions = np.array([35./180.*np.pi, 280./180.*np.pi, 1.])
+
+        return actions, states
+
+
 if __name__ == "__main__":
 
     # === Test the dynamics ===
@@ -493,10 +526,62 @@ if __name__ == "__main__":
     # ax.legend()
 
     # === Test the environment ===
-    env = BlueROV2Heavy3DoFEnv(maxSteps=100)
-    env.reset()
-    for i in range(100):
-        env.step([0.])
+
+    # env = BlueROV2Heavy3DoFEnv(maxSteps=100)
+    # env.reset(initialWaypoint=[1., -1., 280./180.*np.pi])
+    # for i in range(100):
+    #     env.step([0.])
+
+    # # Plot trajectory
+    # fig, ax  = plt.subplots()
+    # ax.set_xlabel("y [m, +ve east]")
+    # ax.set_ylabel("x [m, +ve north]")
+    # ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
+    # ax.plot(env.vehicle.waypoint[1], env.vehicle.waypoint[0], "m*", ms=12, label="Waypoint")
+    # ax.set_aspect("equal")
+    # for i in [0, 5, 10, 15]:
+    #     env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
+    #         env.timeHistory["x2"].values[i], env.vehicle.waypoint[2],
+    #         np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
+    #                   env.timeHistory["u2"][i], env.timeHistory["u3"][i]])/25000.,
+    #         markerSize=0.5, arrowSize=1, scale=1)
+    # ax.legend(ncol=3, bbox_to_anchor=(0.5, 1.01), loc="lower center")
+
+    # # Plot individual DoFs
+    # fig, ax  = plt.subplots()
+    # ax.set_xlabel("Time [s]")
+    # ax.set_ylabel("Displacement [m, rad]")
+    # ax.set_xlim((0, env.timeHistory["t"].max()))
+    # for i, v in enumerate(["x", "y", "psi"]):
+    #     ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"x{i:d}"], label=v)
+    #     ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    # ax.legend()
+
+    # # Plot generalised control forces
+    # fig, ax  = plt.subplots()
+    # ax.set_xlabel("Time [s]")
+    # ax.set_ylabel("Generalised control force or moment [N, Nm]")
+    # ax.set_xlim((0, env.timeHistory["t"].max()))
+    # for i, v in enumerate(["X", "Y", "N"]):
+    #     ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"F{i:d}"], label=v)
+    #     ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    # ax.legend()
+
+    # === Test the dummy agent that applies the LOS navigation algorithm ===
+
+    num_steps = 11
+    env = BlueROV2Heavy3DoFEnv(maxSteps=num_steps)
+    agent = LOSNavigation()
+
+    deterministic = True
+    episode_rewards = []
+    done = False
+
+    obs = env.reset()
+    for i in range(num_steps):
+        action, _states = agent.predict(obs, deterministic=deterministic)
+        obs, reward, done, info = env.step(action)
+        episode_rewards.append(reward)
 
     # Plot trajectory
     fig, ax  = plt.subplots()
@@ -505,7 +590,7 @@ if __name__ == "__main__":
     ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
     ax.plot(env.vehicle.waypoint[1], env.vehicle.waypoint[0], "m*", ms=12, label="Waypoint")
     ax.set_aspect("equal")
-    for i in [0, 5, 10, 15]:
+    for i in [0, 5, 10]:
         env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
             env.timeHistory["x2"].values[i], env.vehicle.waypoint[2],
             np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
