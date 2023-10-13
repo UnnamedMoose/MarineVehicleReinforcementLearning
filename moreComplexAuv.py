@@ -96,6 +96,11 @@ class BlueROV2Heavy3DoF:
         # And 40 N measured by Wu (2018) - pp. 49
         self.Kt_thruster = 40. / (1000. * (3500./60.)**2. * self.D_thruster**4.) # +++
 
+        # Generalised control forces and moments.
+        self.generalisedControlForces = np.zeros(3)
+        # Motor rpms - FP AP FS AS
+        self.controlVector = np.zeros(4)
+
         # Use pseudo-inverse of the control allocation matrix in order to go from
         # desired generalised forces to actuator demands in rpm.
         A = np.array([
@@ -156,10 +161,12 @@ class BlueROV2Heavy3DoF:
         Xd = controlValues[0]*np.cos(psi) + controlValues[1]*np.sin(psi)
         Yd = -controlValues[0]*np.sin(psi) + controlValues[1]*np.cos(psi)
         Nd = controlValues[2]
+        self.generalisedControlForces = np.array([Xd, Yd, Nd])
 
         # Go from forces to rpm.
         cv = np.matmul(self.Ainv, np.array([Xd, Yd, Nd])) # N
         cv = np.sign(cv)*np.sqrt(np.abs(cv)/(self.rho_f*self.D_thruster**4.*self.Kt_thruster))*60. # rpm
+        self.controlVector = cv
 
         # Apply saturation and deadband
         def limit(x):
@@ -291,6 +298,82 @@ class BlueROV2Heavy3DoF:
         # in the body reference frame.
         return np.append(vel, acc)
 
+    def plot_horizontal(self, ax, x, y, psi, psiD, forces, scale=1, markerSize=1, arrowSize=1, vehicleColour="y"):
+        """ Plot a representation of the AUV on the given axes.
+        Thuster forces should be non-dimensionalised with maximum value. """
+
+        x0 = np.array([x, y])
+
+        xyHull = np.array([
+            [self.Length/2.,                            -self.Width/2.+self.D_thruster],
+            [self.Length/2.,                             self.Width/2.-self.D_thruster],
+            [self.Length/2.-self.D_thruster,          self.Width/2.],
+            [-self.Length/2.+self.D_thruster,      self.Width/2.],
+            [-self.Length/2.,                          self.Width/2.-self.D_thruster],
+            [-self.Length/2.,                        -self.Width/2.+self.D_thruster],
+            [-self.Length/2.+self.D_thruster,        -self.Width/2.],
+            [self.Length/2.-self.D_thruster,         -self.Width/2.],
+            [self.Length/2.,                            -self.Width/2.+self.D_thruster],
+        ])
+
+        xyThrusters = np.array([
+            [self.Length/2. - self.D_thruster/2.*np.sin(self.alphaThruster),
+                -self.Width/2. + self.D_thruster/2.*np.cos(self.alphaThruster)],
+            [-self.Length/2. + self.D_thruster/2.*np.sin(self.alphaThruster),
+                -self.Width/2. + self.D_thruster/2.*np.cos(self.alphaThruster)],
+            [self.Length/2. - self.D_thruster/2.*np.sin(self.alphaThruster),
+                self.Width/2. - self.D_thruster/2.*np.cos(self.alphaThruster)],
+            [-self.Length/2. + self.D_thruster/2.*np.sin(self.alphaThruster),
+                self.Width/2. - self.D_thruster/2.*np.cos(self.alphaThruster)]
+        ])
+
+        xyCentreline = np.array([
+            [np.min(xyHull[:,0]), 0.],
+            [np.max(xyHull[:,0]), 0.],
+        ])
+
+        xyDir = np.array([
+            [self.Length/2.-self.Width/4., -self.Width/4.],
+            [self.Length/2., 0.],
+            [self.Length/2.-self.Width/4., self.Width/4.],
+        ])
+
+        F = np.array([
+            [forces[0]*np.cos(self.alphaThruster), forces[0]*np.sin(self.alphaThruster)],
+            [forces[1]*np.cos(self.alphaThruster), -forces[1]*np.sin(self.alphaThruster)],
+            [-forces[2]*np.cos(self.alphaThruster), forces[2]*np.sin(self.alphaThruster)],
+            [-forces[3]*np.cos(self.alphaThruster), -forces[3]*np.sin(self.alphaThruster)],
+        ])
+
+        def rotate(xy, psi):
+            xyn = np.zeros(xy.shape)
+            xyn[:,0] = np.cos(psi)*xy[:,0] - np.sin(psi)*xy[:,1]
+            xyn[:,1] = np.sin(psi)*xy[:,0] + np.cos(psi)*xy[:,1]
+            return xyn
+
+        xyHull = rotate(xyHull*scale, psi) + x0
+        xyThrusters = rotate(xyThrusters*scale, psi) + x0
+        xyCentreline = rotate(xyCentreline*scale, psi) + x0
+        xyDir = rotate(xyDir*scale, psi) + x0
+        F = rotate(F, psi)
+
+        objects = []
+        objects += ax.fill(xyHull[:,1], xyHull[:,0], vehicleColour, alpha=0.5)
+        objects += ax.plot(xyCentreline[:,1], xyCentreline[:,0], "k--", lw=2*markerSize)
+        objects += ax.plot(xyDir[:,1], xyDir[:,0], "k-", lw=2*markerSize)
+        objects += ax.plot(x0[1], x0[0], "ko", mew=3, mfc="None", ms=14*markerSize)
+        objects += ax.plot(xyThrusters[:,1], xyThrusters[:,0], "k.", ms=8)
+
+        for i in range(4):
+            if np.abs(forces[i]) > 0:
+                objects.append( ax.arrow(xyThrusters[i,1], xyThrusters[i,0], F[i,1]*scale, F[i,0]*scale, color="b",
+                        width=0.002*self.Length*scale/2.*arrowSize, lw=2*arrowSize) )
+
+        uD = np.array([np.sin(psiD), np.cos(psiD)])*self.Length/2.
+        objects.append( ax.arrow(x0[1], x0[0], uD[0]*scale, uD[1]*scale, color="r",
+                width=0.002*self.Length*scale/2.*arrowSize, lw=2*arrowSize) )
+
+        return objects
 
 class BlueROV2Heavy3DoFEnv(gym.Env):
     def __init__(self, seed=None, dt=0.2, maxSteps=250):
@@ -320,10 +403,11 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
 
         # Set up the vehicle with a single waypoint and desired heading
         # TODO make this randomised.
-        self.rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
+        self.vehicle = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
 
         # Store the time history of system states and other data.
-        self.timeHistory = [np.append(self.time, self.systemState)]
+        self.timeHistory = [np.concatenate([
+            [self.time], self.systemState, self.vehicle.generalisedControlForces, self.vehicle.controlVector])]
 
         # Create the initial RL state.
         self.state = self.dataToState(self.systemState)
@@ -337,7 +421,7 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
 
         # Advance in time
         result_solve_ivp = scipy.integrate.solve_ivp(
-            self.rov.derivs, (self.time-self.dt, self.time), self.systemState,
+            self.vehicle.derivs, (self.time-self.dt, self.time), self.systemState,
             method='RK45', t_eval=np.array([self.time]), max_step=self.dt, rtol=1e-3, atol=1e-3)
 
         # Sort out the computed heading.
@@ -357,11 +441,14 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         reward = 0.
 
         # Store and tidy up the data when done.
-        self.timeHistory.append(np.append(self.time, self.systemState))
+        self.timeHistory.append(np.concatenate([
+            [self.time], self.systemState, self.vehicle.generalisedControlForces, self.vehicle.controlVector]))
         if done:
             self.timeHistory = pandas.DataFrame(
                 data=np.array(self.timeHistory),
-                columns=["t"]+[f"x{i:d}" for i in range(6)])
+                columns=["t"]+[f"x{i:d}" for i in range(len(self.systemState))]
+                    +[f"F{i:d}" for i in range(len(self.vehicle.generalisedControlForces))]
+                    +[f"u{i:d}" for i in range(len(self.vehicle.controlVector))])
 
         if done:
             self.steps_beyond_done += 1
@@ -408,21 +495,40 @@ if __name__ == "__main__":
     # === Test the environment ===
     env = BlueROV2Heavy3DoFEnv(maxSteps=100)
     env.reset()
-
     for i in range(100):
         env.step([0.])
 
     # Plot trajectory
     fig, ax  = plt.subplots()
-    ax.plot(env.timeHistory["x0"], env.timeHistory["x1"], "r", label="Trajectory")
-    ax.plot(env.rov.waypoint[0], env.rov.waypoint[1], "ko", label="Waypoint")
+    ax.set_xlabel("y [m, +ve east]")
+    ax.set_ylabel("x [m, +ve north]")
+    ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
+    ax.plot(env.vehicle.waypoint[1], env.vehicle.waypoint[0], "m*", ms=12, label="Waypoint")
     ax.set_aspect("equal")
-    ax.legend()
+    for i in [0, 5, 10, 15]:
+        env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
+            env.timeHistory["x2"].values[i], env.vehicle.waypoint[2],
+            np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
+                      env.timeHistory["u2"][i], env.timeHistory["u3"][i]])/25000.,
+            markerSize=0.5, arrowSize=1, scale=1)
+    ax.legend(ncol=3, bbox_to_anchor=(0.5, 1.01), loc="lower center")
 
     # Plot individual DoFs
     fig, ax  = plt.subplots()
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Displacement [m, rad]")
     ax.set_xlim((0, env.timeHistory["t"].max()))
     for i, v in enumerate(["x", "y", "psi"]):
-        ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"{i:d}"], label=v)
-        ax.hlines(env.rov.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+        ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"x{i:d}"], label=v)
+        ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    ax.legend()
+
+    # Plot generalised control forces
+    fig, ax  = plt.subplots()
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Generalised control force or moment [N, Nm]")
+    ax.set_xlim((0, env.timeHistory["t"].max()))
+    for i, v in enumerate(["X", "Y", "N"]):
+        ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"F{i:d}"], label=v)
+        ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
     ax.legend()
