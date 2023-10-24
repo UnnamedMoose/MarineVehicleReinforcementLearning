@@ -25,11 +25,21 @@ from resources import headingError
 
 # %% BlueROV 2 Heavy
 
-class BlueROV2Heavy3DoF:
-    def __init__(self, waypoint):
 
-        # Target.
-        self.waypoint = np.array(waypoint)
+# TODO
+# 1. make the env have 2 wps for a track
+# 2. the states should then include the relative position of each wp
+# 3. these can then be given to the LOS controller to determine the current set point
+# 4. decide if the set heading should point towards the set point or be fixed by the
+#   env - probably the latter to simulate an inspection task and leverage over-actuation of the vehicle
+# TODO
+
+class BlueROV2Heavy3DoF:
+    def __init__(self, setPoint):
+        # Target set point (position and heading).
+        # Should give reasonable behaviour - go to a point and
+        # maintain a constant heading.
+        self.setPoint = setPoint
 
         # Stuff for the PID controller.
         self.eOld = None
@@ -145,7 +155,8 @@ class BlueROV2Heavy3DoF:
         K_P = np.array([20., 20., 20.])
         K_I = np.array([0.1, 0.1, 0.1])
         K_D = np.array([5., 5., 0.5])
-        e = np.append(self.waypoint[:2] - [x, y], headingError(self.waypoint[2], psi))
+        e = np.append(self.setPoint[:2] - np.array([x, y]),
+                      headingError(self.setPoint[2], psi))
         if self.eOld is None:
             self.eOld = e.copy()
         dedt = (e - self.eOld) / max(1e-9, t - self.tOld)
@@ -377,45 +388,81 @@ class BlueROV2Heavy3DoF:
 
 class BlueROV2Heavy3DoFEnv(gym.Env):
     def __init__(self, seed=None, dt=0.2, maxSteps=250):
-        self.dt = dt
-
         # Call base class constructor.
         super(BlueROV2Heavy3DoFEnv, self).__init__()
-        self.seed = seed
 
+        # Set common stuff.
+        self.seed = seed
+        self.dt = dt
         self._max_episode_steps = maxSteps
 
+        # Define the action space.
+        self.lenAction = 3
+        self.action_space = gym.spaces.Box(
+            low=-1.0, high=1.0, shape=(self.lenAction,), dtype=np.float32)
+
+        # Define the observation space.
+        self.lenObs = 3
+        self.observation_space = gym.spaces.Box(
+            -1*np.ones(self.lenObs, dtype=np.float32),
+            np.ones(self.lenObs, dtype=np.float32),
+            shape=(self.lenObs,))
+
     def dataToState(self, systemState):
+        # TODO Make the observations the inputs to the LOS algorithm for the current
+        # path segment.
+
         # TODO need to translate the system state (positions, velocities, etc.)
         # into the RL agent's state.
-        return np.zeros(1)
+        return np.clip([
+            # Dimensionless vector to target.
+            (self.path[self.iWp, 0]-systemState[0]) / (self.vehicle.Length*2.),
+            (self.path[self.iWp, 1]-systemState[1]) / (self.vehicle.Length*2.),
+            # To the following waypoint for path following
+            (self.path[self.iWp+1, 0]-systemState[0]) / (self.vehicle.Length*2.),
+            (self.path[self.iWp+1, 1]-systemState[1]) / (self.vehicle.Length*2.),
+            # Heading error
+            headingError(self.vehicle.setPoint[2], systemState[2]) / (45./180.*np.pi)
+        ], -1., 1.)
 
-    def reset(self, initialWaypoint=None):
+    def reset(self, initialSetpoint=None):
         if self.seed is not None:
             self._np_random, self.seed = gym.utils.seeding.np_random(self.seed)
 
         self.iStep = 0
         self.time = 0.
 
-        # === Create the object for solving the system dynamics ===
-        # TODO make this randomised?
-        self.systemState = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
-
-        # Set up the vehicle with a single waypoint and desired heading
-        # TODO make this randomised?
-        # For now start with no desired displacement
-        # and let the agent figure this out on the first call to the step routine.
-        # This can also be overriden when calling reset. Doing so should allow
-        # a dummy agent to be used such that simple A->B behaviour could be simulated.
-        if initialWaypoint is None:
-            wp = [0., 0., 0./180.*np.pi]
+        if initialSetpoint is None:
+            # Generate a path consisting of two-point segments
+            # with a random heading for both waypoints.
+            nWps = 2
+            self.iWp = 0
+            self.path = (np.random.rand(2*nWps).reshape((nWps, 2))-[0.5, 0.5])*[10., 10.]
+            self.targetHeading = np.random.rand()*2.*np.pi
+            # The initial set point is the firs point on the path.
+            sp = np.append(self.path[0, :], self.targetHeading)
+            self.fixedSp = False
         else:
-            wp = np.array(initialWaypoint)
-        self.vehicle = BlueROV2Heavy3DoF(wp)
+            # Set up the vehicle with a fixed initial waypoint and desired heading.
+            # Doing so should allow a dummy agent to be used such that simple A->B
+            # behaviour could be simulated. This can be used for the tuning of the
+            # controller and testing of system dynamics.
+            sp = np.array(initialSetpoint)
+            self.iWp = 0
+            self.path = np.vstack([sp[:2], sp[:2]])
+            self.targetHeading = sp[2]
+            self.fixedSp = True
+
+        # Create a vehicle instance with an initial set point.
+        self.vehicle = BlueROV2Heavy3DoF(sp)
+
+        # Set the initial conditions.
+        self.systemState = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
 
         # Store the time history of system states and other data.
         self.timeHistory = [np.concatenate([
-            [self.time], self.systemState, self.vehicle.generalisedControlForces, self.vehicle.controlVector])]
+            [self.time], self.systemState, self.vehicle.generalisedControlForces,
+            self.vehicle.controlVector, self.vehicle.setPoint])]
 
         # Create the initial RL state.
         self.state = self.dataToState(self.systemState)
@@ -427,10 +474,26 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         self.iStep += 1
         self.time += self.dt
 
-        # Send action to the dynamics in order to set the new WP and heading demands.
-        psi_d, psi_wp, d_wp = action
-        x_wp = np.array([np.cos(psi_wp), np.sin(psi_wp)])*d_wp + self.systemState[:2]
-        self.vehicle.waypoint = np.append(x_wp, psi_d)
+        if self.fixedSp:
+            # When a constant set point is given upon initialisation, just navigate
+            # to it using the contorller built into the vehicle dynamics model.
+            # This is mainly used for testing of the system dynamics and tuning
+            # of the controller.
+            pass
+        else:
+            # TODO this is where the navigation algorithm has to provide a new set point
+            # that will be passed to the vehicle.
+
+            # Send action to the dynamics in order to set the new virtual WP and heading demand.
+            # psi_d = (action[0]+1.)*np.pi
+            # psi_wp = (action[1]+1.)*np.pi
+            # d_wp = (action[2]+1.)*self.vehicle.Length
+            # x_wp = np.array([np.cos(psi_wp), np.sin(psi_wp)])*d_wp + self.systemState[:2]
+
+            x_sp = action[0]*(2.*self.vehicle.Length) + self.systemState[0]
+            y_sp = action[1]*(2.*self.vehicle.Length) + self.systemState[1]
+            psi_d = action[2]*(45./180.*np.pi) + self.systemState[2]
+            self.vehicle.setPoint = np.array([x_sp, y_sp, psi_d])
 
         # Advance in time
         result_solve_ivp = scipy.integrate.solve_ivp(
@@ -451,17 +514,21 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         if self.iStep >= self._max_episode_steps:
             done = True
 
+        # TODO this could be the distance from the path, RMS deviation from the path
+        # while it has been selected, some penalty for duration and excessive actuation.
         reward = 0.
 
         # Store and tidy up the data when done.
         self.timeHistory.append(np.concatenate([
-            [self.time], self.systemState, self.vehicle.generalisedControlForces, self.vehicle.controlVector]))
+            [self.time], self.systemState, self.vehicle.generalisedControlForces,
+            self.vehicle.controlVector, self.vehicle.setPoint]))
         if done:
             self.timeHistory = pandas.DataFrame(
                 data=np.array(self.timeHistory),
                 columns=["t"]+[f"x{i:d}" for i in range(len(self.systemState))]
                     +[f"F{i:d}" for i in range(len(self.vehicle.generalisedControlForces))]
-                    +[f"u{i:d}" for i in range(len(self.vehicle.controlVector))])
+                    +[f"u{i:d}" for i in range(len(self.vehicle.controlVector))]
+                    +["x_d", "y_d", "psi_d"])
 
         if done:
             self.steps_beyond_done += 1
@@ -471,10 +538,74 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
         return self.state, reward, done, {}
 
 
+def lineOfSight(p0, p1, Rnav):
+    """ Using a line of sight approach, determine the point the vehicle should be
+    navigating to, given its current position and a linear path segment starting
+    at p0 and ending at p1. Waypoints should be given relative to the current
+    vehicle position. For the best effect, non-dimensionalise the coordinate system
+    using the distance to the furthest waypoint (this includes Rnav, too). """
+
+    # Check if the second waypoint is within LOS. If yes, move to it directly.
+    dToWp = np.sqrt(np.sum((p1)**2.))
+    if dToWp < Rnav:
+        targetPoint = p1
+
+    else:
+        # Check if and where LOS intersects the path segment.
+        pathVec = p1 - p0
+        pHat = pathVec / np.linalg.norm(pathVec)
+        dSegment = np.sqrt(np.sum(pathVec**2.))
+        determinant = p0[0]*p1[1] - p1[0]*p0[1]
+        delta = Rnav**2.*dSegment**2. - determinant**2.
+
+        if delta < 0:
+            # Path segment is outside of the line of sight, follow at a direction perpendicular
+            # to the path in order to get back in range.
+            dAlongSegment = np.dot(-p0, pHat)
+            if dAlongSegment > dSegment:
+                targetPoint = p1
+            elif dAlongSegment < 0:
+                targetPoint = p0
+            else:
+                targetPoint = p0 + dAlongSegment*pHat
+
+        if delta >= 0:
+            # Compute the point on the line that's between the two waypoints and nearer to
+            # the current one.
+            sy = np.sign(pathVec[1])
+            if np.abs(sy) < 1e-12:
+                sy = 1.
+            pp0 = np.array([
+                (determinant*pathVec[1] + sy*pathVec[0]*np.sqrt(delta)) / dSegment**2.,
+                (-determinant*pathVec[0] + np.abs(pathVec[1])*np.sqrt(delta)) / dSegment**2.,
+            ])
+            pp1 = np.array([
+                (determinant*pathVec[1] - sy*pathVec[0]*np.sqrt(delta)) / dSegment**2.,
+                (-determinant*pathVec[0] - np.abs(pathVec[1])*np.sqrt(delta)) / dSegment**2.,
+            ])
+
+            # Compute non-dimensional signed distance of each candidate point along
+            # the path segment.
+            s0 = np.dot(pHat, pp0 - p0) / dSegment
+            s1 = np.dot(pHat, pp1 - p0) / dSegment
+
+            # Pick values between 0 and 1 and closer to 1 (current objective).
+            if (s0 >= 0.) and (s0 <= 1.) and (s0 > s1):
+                targetPoint = pp0
+            elif (s1 >= 0.) and (s1 <= 1.):
+                targetPoint = pp1
+
+            # If neither intersection point is on the line segment, use the nearest
+            # of the two waypoints until the line segment gets in range.
+            elif np.linalg.norm(p1) < np.linalg.norm(p0):
+                targetPoint = p1
+            else:
+                targetPoint = p0
+
+    return targetPoint
+
+
 class LOSNavigation(object):
-    """ Simple line-of-sight navigation algorithm that emulates the action of
-    a model used in stable baselines.
-    """
     def __init__(self):
         pass
 
@@ -483,9 +614,27 @@ class LOSNavigation(object):
         # like a stable baselines equivalent
         states = obs
 
+        # First two items in the state vector are the relative positions to the
+        # path waypoints non-dimensionalised by twice the vehicle length and
+        # truncated to <-1, 1>.
+        Length = 0.457
+        p0 = states[:2]#*Length
+        p1 = states[2:4]#*Length
+        psi_e = states[4]
+        # Non-dimensionalise with distance to the waypoint that's further away.
+        # NOTE: is this really necessary? Maybe better to just stick with vehicle length?
+        Rnav = 0.5
+        Rscale = 1#max(np.linalg.norm(p0), np.linalg.norm(p1))
+        p0 = np.clip(p0/Rscale, -1, 1)
+        p1 = np.clip(p1/Rscale, -1, 1)
+        targetPoint = lineOfSight(p0, p1, Rnav/Rscale)*Rscale
+
+        actions = np.array([targetPoint[0], targetPoint[1], psi_e])
+
+        # TODO
         # psi_d, psi_wp, d_wp
-        # TODO scale these to <-1, 1>
-        actions = np.array([35./180.*np.pi, 280./180.*np.pi, 1.])
+        # scale these to <-1, 1>
+        # actions = np.zeros(3.)#np.array([35./180.-1, 280./180-1., 1.])
 
         return actions, states
 
@@ -513,7 +662,7 @@ if __name__ == "__main__":
     # # Plot trajectory
     # fig, ax  = plt.subplots()
     # ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
-    # ax.plot(rov.waypoint[0], rov.waypoint[1], "ko", label="Waypoint")
+    # ax.plot(rov.setPoint[0], rov.setPoint[1], "ko", label="Waypoint")
     # ax.set_aspect("equal")
     # ax.legend()
 
@@ -522,26 +671,26 @@ if __name__ == "__main__":
     # ax.set_xlim((0, tMax))
     # for i, v in enumerate(["x", "y", "psi"]):
     #     ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-    #     ax.hlines(rov.waypoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+    #     ax.hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
     # ax.legend()
 
-    # === Test the environment ===
+    # === Test the environment with a constant set point ===
 
     # env = BlueROV2Heavy3DoFEnv(maxSteps=100)
-    # env.reset(initialWaypoint=[1., -1., 280./180.*np.pi])
+    # env.reset(initialSetpoint=[1., -1., 280./180.*np.pi])
     # for i in range(100):
-    #     env.step([0.])
+    #     env.step([0., 0., 0.])
 
     # # Plot trajectory
     # fig, ax  = plt.subplots()
     # ax.set_xlabel("y [m, +ve east]")
     # ax.set_ylabel("x [m, +ve north]")
     # ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
-    # ax.plot(env.vehicle.waypoint[1], env.vehicle.waypoint[0], "m*", ms=12, label="Waypoint")
+    # ax.plot(env.path[:, 1], env.path[:, 0], "m*--", ms=12, label="Waypoints")
     # ax.set_aspect("equal")
     # for i in [0, 5, 10, 15]:
     #     env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
-    #         env.timeHistory["x2"].values[i], env.vehicle.waypoint[2],
+    #         env.timeHistory["x2"].values[i], env.vehicle.setPoint[2],
     #         np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
     #                   env.timeHistory["u2"][i], env.timeHistory["u3"][i]])/25000.,
     #         markerSize=0.5, arrowSize=1, scale=1)
@@ -554,7 +703,7 @@ if __name__ == "__main__":
     # ax.set_xlim((0, env.timeHistory["t"].max()))
     # for i, v in enumerate(["x", "y", "psi"]):
     #     ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"x{i:d}"], label=v)
-    #     ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    #     ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
     # ax.legend()
 
     # # Plot generalised control forces
@@ -564,12 +713,12 @@ if __name__ == "__main__":
     # ax.set_xlim((0, env.timeHistory["t"].max()))
     # for i, v in enumerate(["X", "Y", "N"]):
     #     ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"F{i:d}"], label=v)
-    #     ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    #     ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
     # ax.legend()
 
     # === Test the dummy agent that applies the LOS navigation algorithm ===
 
-    num_steps = 11
+    num_steps = 100
     env = BlueROV2Heavy3DoFEnv(maxSteps=num_steps)
     agent = LOSNavigation()
 
@@ -588,11 +737,12 @@ if __name__ == "__main__":
     ax.set_xlabel("y [m, +ve east]")
     ax.set_ylabel("x [m, +ve north]")
     ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
-    ax.plot(env.vehicle.waypoint[1], env.vehicle.waypoint[0], "m*", ms=12, label="Waypoint")
+    ax.plot(env.timeHistory["y_d"], env.timeHistory["x_d"], ".", c="orange", label="Set point")
+    ax.plot(env.path[:, 1], env.path[:, 0], "m*--", lw=2, ms=12, label="Target path")
     ax.set_aspect("equal")
     for i in [0, 5, 10]:
         env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
-            env.timeHistory["x2"].values[i], env.vehicle.waypoint[2],
+            env.timeHistory["x2"].values[i], env.vehicle.setPoint[2],
             np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
                       env.timeHistory["u2"][i], env.timeHistory["u3"][i]])/25000.,
             markerSize=0.5, arrowSize=1, scale=1)
@@ -605,7 +755,8 @@ if __name__ == "__main__":
     ax.set_xlim((0, env.timeHistory["t"].max()))
     for i, v in enumerate(["x", "y", "psi"]):
         ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"x{i:d}"], label=v)
-        ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+        ax.plot(env.timeHistory["t"], env.timeHistory[v+"_d"], color=ln.get_color(), linestyle="dashed")
+        # ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
     ax.legend()
 
     # Plot generalised control forces
@@ -615,5 +766,5 @@ if __name__ == "__main__":
     ax.set_xlim((0, env.timeHistory["t"].max()))
     for i, v in enumerate(["X", "Y", "N"]):
         ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"F{i:d}"], label=v)
-        ax.hlines(env.vehicle.waypoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+        ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
     ax.legend()
