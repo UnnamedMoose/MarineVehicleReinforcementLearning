@@ -26,14 +26,6 @@ from resources import headingError
 # %% BlueROV 2 Heavy
 
 
-# TODO
-# 1. make the env have 2 wps for a track
-# 2. the states should then include the relative position of each wp
-# 3. these can then be given to the LOS controller to determine the current set point
-# 4. decide if the set heading should point towards the set point or be fixed by the
-#   env - probably the latter to simulate an inspection task and leverage over-actuation of the vehicle
-# TODO
-
 class BlueROV2Heavy3DoF:
     def __init__(self, setPoint):
         # Target set point (position and heading).
@@ -289,7 +281,6 @@ class BlueROV2Heavy3DoF:
 
         # ===
         # Total forces and moments
-#        RHS = -np.dot(C+D, vel) - G + H + E
         RHS = -np.dot(Crb, vel) - np.dot(Ca+D, velRel) - G + H + E
 
         # ===
@@ -409,18 +400,15 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
             shape=(self.lenObs,))
 
     def dataToState(self, systemState):
-        # TODO Make the observations the inputs to the LOS algorithm for the current
-        # path segment.
-
-        # TODO need to translate the system state (positions, velocities, etc.)
+        # Need to translate the system state (positions, velocities, etc.)
         # into the RL agent's state.
         return np.clip([
             # Dimensionless vector to target.
-            (self.path[self.iWp, 0]-systemState[0]) / (self.vehicle.Length*2.),
-            (self.path[self.iWp, 1]-systemState[1]) / (self.vehicle.Length*2.),
+            (self.path[self.iWp, 0]-systemState[0]) / (self.vehicle.Length*3.),
+            (self.path[self.iWp, 1]-systemState[1]) / (self.vehicle.Length*3.),
             # To the following waypoint for path following
-            (self.path[self.iWp+1, 0]-systemState[0]) / (self.vehicle.Length*2.),
-            (self.path[self.iWp+1, 1]-systemState[1]) / (self.vehicle.Length*2.),
+            (self.path[self.iWp+1, 0]-systemState[0]) / (self.vehicle.Length*3.),
+            (self.path[self.iWp+1, 1]-systemState[1]) / (self.vehicle.Length*3.),
             # Heading error
             headingError(self.vehicle.setPoint[2], systemState[2]) / (45./180.*np.pi)
         ], -1., 1.)
@@ -481,15 +469,8 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
             # of the controller.
             pass
         else:
-            # TODO this is where the navigation algorithm has to provide a new set point
+            # This is where the navigation algorithm has to provide a new set point
             # that will be passed to the vehicle.
-
-            # Send action to the dynamics in order to set the new virtual WP and heading demand.
-            # psi_d = (action[0]+1.)*np.pi
-            # psi_wp = (action[1]+1.)*np.pi
-            # d_wp = (action[2]+1.)*self.vehicle.Length
-            # x_wp = np.array([np.cos(psi_wp), np.sin(psi_wp)])*d_wp + self.systemState[:2]
-
             x_sp = action[0]*(2.*self.vehicle.Length) + self.systemState[0]
             y_sp = action[1]*(2.*self.vehicle.Length) + self.systemState[1]
             psi_d = action[2]*(45./180.*np.pi) + self.systemState[2]
@@ -615,26 +596,18 @@ class LOSNavigation(object):
         states = obs
 
         # First two items in the state vector are the relative positions to the
-        # path waypoints non-dimensionalised by twice the vehicle length and
+        # path waypoints non-dimensionalised by a factor of the vehicle length and
         # truncated to <-1, 1>.
-        Length = 0.457
-        p0 = states[:2]#*Length
-        p1 = states[2:4]#*Length
+        p0 = states[:2]
+        p1 = states[2:4]
         psi_e = states[4]
-        # Non-dimensionalise with distance to the waypoint that's further away.
-        # NOTE: is this really necessary? Maybe better to just stick with vehicle length?
         Rnav = 0.5
-        Rscale = 1#max(np.linalg.norm(p0), np.linalg.norm(p1))
-        p0 = np.clip(p0/Rscale, -1, 1)
-        p1 = np.clip(p1/Rscale, -1, 1)
-        targetPoint = lineOfSight(p0, p1, Rnav/Rscale)*Rscale
+        targetPoint = lineOfSight(p0, p1, Rnav)
 
+        # Actions are the set point relative to the vehicle
+        # (can be viewed as poistion error) and heading error.
+        # The vehicle controller will act to minimise these.
         actions = np.array([targetPoint[0], targetPoint[1], psi_e])
-
-        # TODO
-        # psi_d, psi_wp, d_wp
-        # scale these to <-1, 1>
-        # actions = np.zeros(3.)#np.array([35./180.-1, 280./180-1., 1.])
 
         return actions, states
 
@@ -739,6 +712,8 @@ if __name__ == "__main__":
     ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
     ax.plot(env.timeHistory["y_d"], env.timeHistory["x_d"], ".", c="orange", label="Set point")
     ax.plot(env.path[:, 1], env.path[:, 0], "m*--", lw=2, ms=12, label="Target path")
+    for i, x in enumerate(["A", "B"]):
+        ax.text(env.path[i, 1], env.path[i, 0], x)
     ax.set_aspect("equal")
     for i in [0, 5, 10]:
         env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
