@@ -225,8 +225,7 @@ class BlueROV2Heavy3DoF:
 
         # ===
         # Fluid damping.
-        # Divided by rho to correct for environment models c.f. Kantapon's thesis
-        # and by velocity to be made invariant of the current state.
+        # Divided by velocity to be made invariant of the current state.
         Dl = -1. * np.array([
             [self.Xu, 0., 0.],
             [0., self.Yv, self.Yr],
@@ -393,7 +392,7 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
             low=-1.0, high=1.0, shape=(self.lenAction,), dtype=np.float32)
 
         # Define the observation space.
-        self.lenObs = 3
+        self.lenObs = 5
         self.observation_space = gym.spaces.Box(
             -1*np.ones(self.lenObs, dtype=np.float32),
             np.ones(self.lenObs, dtype=np.float32),
