@@ -1,6 +1,9 @@
 testEpisodes/*
 tempData/*
 
+tag_00_Dec2023_simpleControlTurbulence/testEpisodes/*
+tag_00_Dec2023_simpleControlTurbulence/tempData/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
