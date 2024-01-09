@@ -46,6 +46,54 @@ def headingError(psi_d, psi):
     return diff
 
 
+def coordinateTransform(phi, theta, psi, dof=["x", "y", "psi"]):
+    # TODO make a generic implementation for arbitrary DoF combinations
+    """ Return a coordinate transform matrix given the active DoF and the
+    required yaw, roll and pitch angles. """
+
+    if type(dof) is int:
+        if dof == 3:
+            dof = ["x", "y", "psi"]
+        elif dof == 6:
+            dof = ["x", "y", "z", "phi", "theta", "psi"]
+
+    if set(dof) == set(["x", "y", "psi"]):
+        coordTransform = np.array([
+            [np.cos(psi), -np.sin(psi), 0.],
+            [np.sin(psi), np.cos(psi), 0.],
+            [0., 0., 1.],
+        ])
+
+    elif set(dof) == set(["x", "y", "z", "phi", "theta", "psi"]):
+        cosThetaDenom = np.cos(theta)
+        if np.abs(cosThetaDenom) < 1e-12:
+            cosThetaDenom = 1e-6
+        elif np.abs(cosThetaDenom) < 1e-6:
+            cosThetaDenom = 1e-6 * np.sign(cosThetaDenom)
+
+        J1 = np.array([
+            [np.cos(psi)*np.cos(theta), -np.sin(psi)*np.cos(phi) + np.cos(psi)*np.sin(theta)*np.sin(phi), np.sin(psi)*np.sin(phi) + np.cos(psi)*np.sin(theta)*np.sin(phi)],
+            [np.sin(psi)*np.cos(theta), np.cos(psi)*np.cos(phi) + np.sin(psi)*np.sin(theta)*np.sin(phi), -np.cos(psi)*np.sin(phi) + np.sin(psi)*np.sin(theta)*np.cos(phi)],
+            [-np.sin(theta), np.cos(theta)*np.sin(phi), np.cos(theta)*np.cos(phi)],
+        ])
+
+        J2 = np.array([
+            [1., np.sin(phi)*np.sin(theta)/cosThetaDenom, np.cos(phi)*np.sin(theta)/cosThetaDenom],
+            [0., np.cos(phi), -np.sin(phi)],
+            [0., np.sin(phi)/cosThetaDenom, np.cos(phi)/cosThetaDenom],
+        ])
+
+        coordTransform = np.array([
+            [J1[0,0], J1[0,1], J1[0,2], 0., 0., 0.],
+            [J1[1,0], J1[1,1], J1[1,2], 0., 0., 0.],
+            [J1[2,0], J1[2,1], J1[2,2], 0., 0., 0.],
+            [0., 0., 0., J2[0,0], J2[0,1], J2[0,2]],
+            [0., 0., 0., J2[1,0], J2[1,1], J2[1,2]],
+            [0., 0., 0., J2[2,0], J2[2,1], J2[2,2]],
+        ])
+
+    return coordTransform
+
 def evaluate_agent(agent, env, num_episodes=1, num_steps=None, deterministic=True,
                    num_last_for_reward=None, render=False, init=None, saveDir=None):
     """

@@ -615,36 +615,36 @@ if __name__ == "__main__":
 
     # === Test the dynamics ===
 
-    # # Constants and initial conditions
-    # dt = 0.25
-    # state0 = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
-    # tMax = 15.
-    # t = np.arange(0.0, tMax, dt)
+    # Constants and initial conditions
+    dt = 0.25
+    state0 = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
+    tMax = 15.
+    t = np.arange(0.0, tMax, dt)
 
-    # # Set up the vehicle with a single waypoint and desired heading
-    # rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
+    # Set up the vehicle with a single waypoint and desired heading
+    rov = BlueROV2Heavy3DoF([1., -1., 280./180.*np.pi])
 
-    # # Advance in time
-    # result_solve_ivp = scipy.integrate.solve_ivp(
-    #     rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
+    # Advance in time
+    result_solve_ivp = scipy.integrate.solve_ivp(
+        rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
 
-    # # Sort out the computed heading.
-    # result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
+    # Sort out the computed heading.
+    result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
 
-    # # Plot trajectory
-    # fig, ax  = plt.subplots()
-    # ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
-    # ax.plot(rov.setPoint[0], rov.setPoint[1], "ko", label="Waypoint")
-    # ax.set_aspect("equal")
-    # ax.legend()
+    # Plot trajectory
+    fig, ax  = plt.subplots()
+    ax.plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], "r", label="Trajectory")
+    ax.plot(rov.setPoint[0], rov.setPoint[1], "ko", label="Waypoint")
+    ax.set_aspect("equal")
+    ax.legend()
 
-    # # Plot individual DoFs
-    # fig, ax  = plt.subplots()
-    # ax.set_xlim((0, tMax))
-    # for i, v in enumerate(["x", "y", "psi"]):
-    #     ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-    #     ax.hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
-    # ax.legend()
+    # Plot individual DoFs
+    fig, ax  = plt.subplots()
+    ax.set_xlim((0, tMax))
+    for i, v in enumerate(["x", "y", "psi"]):
+        ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
+        ax.hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+    ax.legend()
 
     # === Test the environment with a constant set point ===
 
@@ -690,55 +690,57 @@ if __name__ == "__main__":
 
     # === Test the dummy agent that applies the LOS navigation algorithm ===
 
-    num_steps = 100
-    env = BlueROV2Heavy3DoFEnv(maxSteps=num_steps)
-    agent = LOSNavigation()
+    # num_steps = 100
+    # env = BlueROV2Heavy3DoFEnv(maxSteps=num_steps)
+    # agent = LOSNavigation()
+    #
+    # deterministic = True
+    # episode_rewards = []
+    # done = False
+    #
+    # obs = env.reset()
+    # for i in range(num_steps):
+    #     action, _states = agent.predict(obs, deterministic=deterministic)
+    #     obs, reward, done, info = env.step(action)
+    #     episode_rewards.append(reward)
+    #
+    # # Plot trajectory
+    # fig, ax  = plt.subplots()
+    # ax.set_xlabel("y [m, +ve east]")
+    # ax.set_ylabel("x [m, +ve north]")
+    # ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
+    # ax.plot(env.timeHistory["y_d"], env.timeHistory["x_d"], ".", c="orange", label="Set point")
+    # ax.plot(env.path[:, 1], env.path[:, 0], "m*--", lw=2, ms=12, label="Target path")
+    # for i, x in enumerate(["A", "B"]):
+    #     ax.text(env.path[i, 1], env.path[i, 0], x)
+    # ax.set_aspect("equal")
+    # for i in [0, 5, 10]:
+    #     env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
+    #         env.timeHistory["x2"].values[i], env.vehicle.setPoint[2],
+    #         np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
+    #                   env.timeHistory["u2"][i], env.timeHistory["u3"][i]])/25000.,
+    #         markerSize=0.5, arrowSize=1, scale=1)
+    # ax.legend(ncol=3, bbox_to_anchor=(0.5, 1.01), loc="lower center")
+    #
+    # # Plot individual DoFs
+    # fig, ax  = plt.subplots()
+    # ax.set_xlabel("Time [s]")
+    # ax.set_ylabel("Displacement [m, rad]")
+    # ax.set_xlim((0, env.timeHistory["t"].max()))
+    # for i, v in enumerate(["x", "y", "psi"]):
+    #     ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"x{i:d}"], label=v)
+    #     ax.plot(env.timeHistory["t"], env.timeHistory[v+"_d"], color=ln.get_color(), linestyle="dashed")
+    #     # ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    # ax.legend()
+    #
+    # # Plot generalised control forces
+    # fig, ax  = plt.subplots()
+    # ax.set_xlabel("Time [s]")
+    # ax.set_ylabel("Generalised control force or moment [N, Nm]")
+    # ax.set_xlim((0, env.timeHistory["t"].max()))
+    # for i, v in enumerate(["X", "Y", "N"]):
+    #     ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"F{i:d}"], label=v)
+    #     ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
+    # ax.legend()
 
-    deterministic = True
-    episode_rewards = []
-    done = False
-
-    obs = env.reset()
-    for i in range(num_steps):
-        action, _states = agent.predict(obs, deterministic=deterministic)
-        obs, reward, done, info = env.step(action)
-        episode_rewards.append(reward)
-
-    # Plot trajectory
-    fig, ax  = plt.subplots()
-    ax.set_xlabel("y [m, +ve east]")
-    ax.set_ylabel("x [m, +ve north]")
-    ax.plot(env.timeHistory["x1"], env.timeHistory["x0"], "r", label="Trajectory")
-    ax.plot(env.timeHistory["y_d"], env.timeHistory["x_d"], ".", c="orange", label="Set point")
-    ax.plot(env.path[:, 1], env.path[:, 0], "m*--", lw=2, ms=12, label="Target path")
-    for i, x in enumerate(["A", "B"]):
-        ax.text(env.path[i, 1], env.path[i, 0], x)
-    ax.set_aspect("equal")
-    for i in [0, 5, 10]:
-        env.vehicle.plot_horizontal(ax, env.timeHistory["x0"].values[i], env.timeHistory["x1"].values[i],
-            env.timeHistory["x2"].values[i], env.vehicle.setPoint[2],
-            np.array([env.timeHistory["u0"][i], env.timeHistory["u1"][i],
-                      env.timeHistory["u2"][i], env.timeHistory["u3"][i]])/25000.,
-            markerSize=0.5, arrowSize=1, scale=1)
-    ax.legend(ncol=3, bbox_to_anchor=(0.5, 1.01), loc="lower center")
-
-    # Plot individual DoFs
-    fig, ax  = plt.subplots()
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Displacement [m, rad]")
-    ax.set_xlim((0, env.timeHistory["t"].max()))
-    for i, v in enumerate(["x", "y", "psi"]):
-        ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"x{i:d}"], label=v)
-        ax.plot(env.timeHistory["t"], env.timeHistory[v+"_d"], color=ln.get_color(), linestyle="dashed")
-        # ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
-    ax.legend()
-
-    # Plot generalised control forces
-    fig, ax  = plt.subplots()
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Generalised control force or moment [N, Nm]")
-    ax.set_xlim((0, env.timeHistory["t"].max()))
-    for i, v in enumerate(["X", "Y", "N"]):
-        ln, = ax.plot(env.timeHistory["t"], env.timeHistory[f"F{i:d}"], label=v)
-        ax.hlines(env.vehicle.setPoint[i], 0, env.timeHistory["t"].max(), color=ln.get_color(), linestyle="dashed")
-    ax.legend()
+    plt.show()
