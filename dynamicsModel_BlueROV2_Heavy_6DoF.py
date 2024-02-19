@@ -158,6 +158,12 @@ class BlueROV2Heavy6DoF:
         self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
         self.Ainv = np.linalg.pinv(self.A)
 
+        # for i in range(6):
+        #     print(" ".join(["{:.6e}".format(v) for v in self.A[i,:]]))
+        # print("===")
+        # for i in range(8):
+        #     print(", ".join(["{:.6e}".format(v) for v in self.Ainv[i,:]]))
+
     def thrusterModel(self, rpm):
         #  u, v,
         """ Compute the force delivered by a thruster. """
@@ -724,48 +730,6 @@ if __name__ == "__main__":
         ax.hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
     ax.legend()
 
-    # Save each time step to a vtk file for animating with paraview.
-
-    def saveCoordSystem(filename, pos, orientation, L=0.25):
-        Jtransform = coordinateTransform(orientation[0], orientation[1], orientation[2], dof=6)
-        # invJtransform = np.linalg.pinv(Jtransform)
-
-        # Get vectors defining the body coordinate system.
-        xPrime = np.dot(Jtransform, np.array([1., 0., 0., 0., 0., 0.]))[:3]
-        yPrime = np.dot(Jtransform, np.array([0., 1., 0., 0., 0., 0.]))[:3]
-        zPrime = np.dot(Jtransform, np.array([0., 0., 1., 0., 0., 0.]))[:3]
-
-        p0 = pos
-        p1 = pos + L*xPrime
-        p2 = pos + L*yPrime
-        p3 = pos + L*zPrime
-        bodyCoords, bodyCoordPts = np.vstack([xPrime, yPrime, zPrime]), np.vstack([p0, p1, p2, p3])
-
-        with open(filename, "w") as outfile:
-            outfile.write("# vtk DataFile Version 3.0\n")
-            outfile.write("vtk output\n")
-            outfile.write("ASCII\n")
-            outfile.write("DATASET POLYDATA\n")
-            outfile.write("POINTS 4 float\n")
-            for j in range(4):
-                outfile.write("{:.5e} {:.5e} {:.5e}\n".format(
-                    bodyCoordPts[j, 0], bodyCoordPts[j, 1], bodyCoordPts[j, 2]))
-            outfile.write("LINES 3 9\n")
-            outfile.write("2 0 1\n")
-            outfile.write("2 0 2\n")
-            outfile.write("2 0 3\n")
-            outfile.write("CELL_DATA {:d}\n".format(3))
-            outfile.write("FIELD FieldData {:d}\n".format(1))
-            outfile.write("\n")
-            outfile.write("{} {:d} {:d} {}\n".format("iLine", 1, 3, "int"))
-            outfile.write("1\n")
-            outfile.write("2\n")
-            outfile.write("3\n")
-            outfile.write("\n")
-
-        return bodyCoords
-
-
     # Read the vehicle geometry.
     with open("BlueROV2heavy_geom.obj", "r") as infile:
         s = infile.read()
@@ -773,12 +737,12 @@ if __name__ == "__main__":
     faces = np.array([[int(v) for v in l.split()[1:]] for l in re.findall("f .*", s)])
 
     # Save the target location and orientation.
-    saveCoordSystem("./tempData/target.vtk", rov.setPoint[:3], rov.setPoint[3:6], L=0.4)
+    resources.saveCoordSystem("./tempData/target.vtk", rov.setPoint[:3], rov.setPoint[3:6], L=0.4)
 
     # Save moving coordinate system and geometry.
     for iTime in range(result_solve_ivp.t.shape[0]):
         filename = "./tempData/result_{:06d}.vtk".format(iTime)
-        saveCoordSystem(filename, result_solve_ivp.y[:3, iTime], result_solve_ivp.y[3:6, iTime])
+        resources.saveCoordSystem(filename, result_solve_ivp.y[:3, iTime], result_solve_ivp.y[3:6, iTime])
 
         if saveGeom:
             Jtransform = coordinateTransform(result_solve_ivp.y[3, iTime], result_solve_ivp.y[4, iTime],

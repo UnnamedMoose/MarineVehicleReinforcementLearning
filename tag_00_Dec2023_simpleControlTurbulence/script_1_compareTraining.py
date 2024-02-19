@@ -23,7 +23,8 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 # %% Load
 
 saveFigs = True
-comparisonLabel = "differentAgents"
+comparisonLabel = "alternativeStateVector"
+# comparisonLabel = "differentAgents"
 # comparisonLabel = "experienceTransformation"
 nRolling = 200
 
@@ -32,7 +33,7 @@ trainings = {
     # "Random init.": "SAC_try8",
 
     # 2 dummy state vars for CFD integration
-    "SAC": "SAC_try9",
+    # "SAC": "SAC_try9",
 
     # Restart tests.
     # "For restart": "SAC_try8_forRestart",
@@ -58,10 +59,16 @@ trainings = {
     # "LR 2e-3, ent. target -1.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-1.0_ent_coef_auto",
     # "LR 2e-3, ent. target -8.0": "SAC_try9_trainingTest_lr_2e-3_target_entropy_-8.0_ent_coef_auto",
 
-    "DDPG": "DDPG_try0",
-    "TD3": "TD3_try0",
-    "LSTM PPO": "RecurrentPPO_try0",
-    "TQC": "TQC_try0",
+    # "DDPG": "DDPG_try0",
+    # "TD3": "TD3_try0",
+    # "LSTM PPO": "RecurrentPPO_try0",
+    # "TQC": "TQC_try0",
+
+    "Baseline": "TQC_rerun_try0",
+    # "TQC rev 0": "TQC_modState_try0",  # Something
+    "No scaling, no de/dt": "TQC_modState_try1",  # No scaling, no rate of change of error
+    "Only scaling": "TQC_modState_try2",  # With scaling, no rate of change of error
+    "Only de/dt": "TQC_modState_try3",  # No scaling, with rate of change of error
 
     # "TQC+trf": "TQC_customBuffer_try2",
     # "TQC+trf+N$_{grad}$=3": "TQC_customBuffer_try3",
@@ -74,6 +81,8 @@ data = {}
 for t in trainings:
     files = [f for f in os.listdir("agentData") if re.match(trainings[t]+"_[0-9]+.monitor.csv", f)
              or re.match(trainings[t]+"_[0-9]+.zip.monitor.csv", f)]
+    print(t)
+    print(files)
     for i, f in enumerate(files):
         df = pandas.read_csv(os.path.join("agentData", f), skiprows=1)
         data["{} {:d}".format(t, i)] = df[["r", "l"]].rolling(nRolling).mean().dropna()
@@ -121,6 +130,7 @@ ax.grid(axis="y", linestyle="dashed")
 ax.set_xscale("log")
 
 lns = []
+# linestyles = [".", "-", "--", ":"]
 for i, t in enumerate(trainings):
     kBest = None
     for k in data:
@@ -132,7 +142,9 @@ for i, t in enumerate(trainings):
         if np.mean(data[k]["r"].values[-50:]) > np.mean(data[kBest]["r"].values[-50:]):
             kBest = k
     lns += ln
-fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=6, framealpha=1)
+fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=3, framealpha=1)
 
 if saveFigs:
     plt.savefig("./Figures/trainingComparison_{}.png".format(comparisonLabel), dpi=200, bbox_inches="tight")
+
+plt.show()

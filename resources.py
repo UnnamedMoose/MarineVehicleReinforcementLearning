@@ -23,6 +23,46 @@ import yaml
 orientation = "right_up_anticlockwise"
 
 
+def saveCoordSystem(filename, pos, orientation, L=0.25):
+    Jtransform = coordinateTransform(orientation[0], orientation[1], orientation[2], dof=6)
+    # invJtransform = np.linalg.pinv(Jtransform)
+
+    # Get vectors defining the body coordinate system.
+    xPrime = np.dot(Jtransform, np.array([1., 0., 0., 0., 0., 0.]))[:3]
+    yPrime = np.dot(Jtransform, np.array([0., 1., 0., 0., 0., 0.]))[:3]
+    zPrime = np.dot(Jtransform, np.array([0., 0., 1., 0., 0., 0.]))[:3]
+
+    p0 = pos
+    p1 = pos + L*xPrime
+    p2 = pos + L*yPrime
+    p3 = pos + L*zPrime
+    bodyCoords, bodyCoordPts = np.vstack([xPrime, yPrime, zPrime]), np.vstack([p0, p1, p2, p3])
+
+    with open(filename, "w") as outfile:
+        outfile.write("# vtk DataFile Version 3.0\n")
+        outfile.write("vtk output\n")
+        outfile.write("ASCII\n")
+        outfile.write("DATASET POLYDATA\n")
+        outfile.write("POINTS 4 float\n")
+        for j in range(4):
+            outfile.write("{:.5e} {:.5e} {:.5e}\n".format(
+                bodyCoordPts[j, 0], bodyCoordPts[j, 1], bodyCoordPts[j, 2]))
+        outfile.write("LINES 3 9\n")
+        outfile.write("2 0 1\n")
+        outfile.write("2 0 2\n")
+        outfile.write("2 0 3\n")
+        outfile.write("CELL_DATA {:d}\n".format(3))
+        outfile.write("FIELD FieldData {:d}\n".format(1))
+        outfile.write("\n")
+        outfile.write("{} {:d} {:d} {}\n".format("iLine", 1, 3, "int"))
+        outfile.write("1\n")
+        outfile.write("2\n")
+        outfile.write("3\n")
+        outfile.write("\n")
+
+    return bodyCoords
+
+
 def headingError(psi_d, psi):
     """
     Function used for computing signed heading error that wraps around pi properly.
