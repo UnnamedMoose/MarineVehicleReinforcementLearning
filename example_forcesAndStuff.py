@@ -20,6 +20,13 @@ class RovTemp(object):
         # iHat, jHat, kHat
         return self.vehicleAxes.T
 
+    def computeRollPitchYaw(self):
+        # Compute the global roll, pitch, and yaw angles
+        roll = np.arctan2(self.kHat[1], self.kHat[2])
+        pitch = np.arctan2(-self.kHat[0], np.sqrt(self.kHat[1]**2 + self.kHat[2]**2))
+        yaw = np.arctan2(self.jHat[0], self.iHat[0])
+        return np.array([roll, pitch, yaw])
+
     def updateMovingCoordSystem(self, rotation_angles):
         # Compute the change in the rotation angles compared to the previous time step.
         dRotAngles = rotation_angles - self.rotation_angles
@@ -43,7 +50,7 @@ ax.set_xlabel("x")
 ax.set_ylabel("y")
 ax.set_zlabel("z")
 ax.set_aspect("equal")
-plt.subplots_adjust(top=1, bottom=0.15)
+plt.subplots_adjust(top=0.95, bottom=0.15)
 lim = 0.5
 ax.set_xlim((-lim, lim))
 ax.set_ylim((-lim, lim))
@@ -71,12 +78,14 @@ sldr2 = Slider(sldr_ax2, 'theta', -sldrLim, sldrLim, valinit=0, valfmt="%.1f deg
 sldr3 = Slider(sldr_ax3, 'psi', -sldrLim, sldrLim, valinit=0, valfmt="%.1f deg")
 
 def onChanged(val):
-    global rov, lns
+    global rov, lns, ax
     angles = np.array([sldr1.val, sldr2.val, sldr3.val])/180.*np.pi
     rov.updateMovingCoordSystem(angles)
     for l in lns:
         l.remove()
     lns = plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat)
+    ax.set_title(
+        "roll, pitch, yaw = " +", ".join(['{:.1f} deg'.format(v) for v in rov.computeRollPitchYaw()/np.pi*180.]))
     return lns
 
 sldr1.on_changed(onChanged)
