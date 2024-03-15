@@ -1,25 +1,38 @@
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.spatial.transform import Rotation
 from matplotlib.widgets import Slider
+import numpy as np
+from scipy.spatial.transform import Rotation
 
 class RovTemp(object):
     def __init__(self):
-        self.initial_rotation_matrix = np.eye(3)
-        self.iHat, self.jHat, self.kHat = self.initial_rotation_matrix .T
+        # Main part - rotation matrix around the the global coordinate system axes.
+        self.vehicleAxes = np.eye(3)
+        # Current roll, pitch, yaw
+        self.rotation_angles = np.zeros(3)
+        # Unit vectors along the vehicle x, y, z axes unpacked from the aggregate
+        # array for ease of use.
+        self.iHat, self.jHat, self.kHat = self.getCoordSystem()
+
+    def getCoordSystem(self):
+        # iHat, jHat, kHat
+        return self.vehicleAxes.T
 
     def updateMovingCoordSystem(self, rotation_angles):
+        # Compute the change in the rotation angles compared to the previous time step.
+        dRotAngles = rotation_angles - self.rotation_angles
+        # Store the current orientation.
+        self.rotation_angles = rotation_angles
         # Create quaternion from rotation angles from (roll pitch yaw)
-        rotation_quaternion = Rotation.from_euler('xyz', rotation_angles, degrees=False).as_quat()
+        rotation_quaternion = Rotation.from_euler('xyz', dRotAngles, degrees=False).as_quat()
         # Convert quaternion to rotation matrix
         rotation_matrix = Rotation.from_quat(rotation_quaternion).as_matrix()
-        # Apply rotation to the initial coordinate system
-        rotated_matrix = rotation_matrix.dot(self.initial_rotation_matrix)
+        # Apply rotation to the previous coordinate system.
+        self.vehicleAxes = rotation_matrix.dot(self.vehicleAxes)
         # Extract the new coordinate system vectors
-        self.iHat, self.jHat, self.kHat = rotated_matrix.T
+        self.iHat, self.jHat, self.kHat = self.getCoordSystem()
 
 rov = RovTemp()
 
