@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
 
+# TODO we want to express forces and moments in the body coordinate system and integrate there.
+#   Then transform the displacements and orientation into the global reference frame.
+#   This means we need to rotate the (iHat, jHat, kHat) coordinates around those axes
+#   but and get their updated directions expressed in the global coordinate system.
+# TODO Or use the old approach and compute the forces and integrate accelerations
+#   in the local coordinate system but then convert the velocities to the global
+#   reference frame before integrating.
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import Slider
@@ -21,36 +29,32 @@ class RovTemp(object):
         return self.vehicleAxes.T
 
     def computeRollPitchYaw(self):
-        # Compute the global roll, pitch, and yaw angles
-        roll = np.arctan2(self.kHat[1], self.kHat[2])
-        pitch = np.arctan2(-self.kHat[0], np.sqrt(self.kHat[1]**2 + self.kHat[2]**2))
-        yaw = np.arctan2(self.jHat[0], self.iHat[0])
+        # Compute the global roll, pitch, and yaw angles.
+        # NOTE: These are not particularly safe and can be +/- pi away from the truth. Use with caution!
+        roll = -np.arctan2(self.kHat[1], self.kHat[2])
+        pitch = np.arctan2(self.kHat[0], self.kHat[2])
+        # pitch = -np.arctan2(-self.kHat[0], np.sqrt(self.kHat[1]**2 + self.kHat[2]**2))
+        yaw = -np.arctan2(self.jHat[0], self.iHat[0])
         return np.array([roll, pitch, yaw])
 
     def updateMovingCoordSystem(self, rotation_angles):
-        # Compute the change in the rotation angles compared to the previous time step.
-        dRotAngles = rotation_angles - self.rotation_angles
         # Store the current orientation.
         self.rotation_angles = rotation_angles
         # Create quaternion from rotation angles from (roll pitch yaw)
-        rotation_quaternion = Rotation.from_euler('xyz', dRotAngles, degrees=False).as_quat()
-        # Convert quaternion to rotation matrix
-        rotation_matrix = Rotation.from_quat(rotation_quaternion).as_matrix()
-        # Apply rotation to the previous coordinate system.
-        self.vehicleAxes = rotation_matrix.dot(self.vehicleAxes)
+        self.vehicleAxes = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix()
         # Extract the new coordinate system vectors
         self.iHat, self.jHat, self.kHat = self.getCoordSystem()
 
 rov = RovTemp()
 
 # Plot orientation.
-fig  = plt.figure()
+fig  = plt.figure(figsize=(8, 9))
 ax = fig.add_subplot(projection='3d')
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 ax.set_zlabel("z")
 ax.set_aspect("equal")
-plt.subplots_adjust(top=0.95, bottom=0.15)
+plt.subplots_adjust(top=0.91, bottom=0.3)
 lim = 0.5
 ax.set_xlim((-lim, lim))
 ax.set_ylim((-lim, lim))
@@ -68,28 +72,75 @@ def plotCoordSystem(ax, iHat, jHat, kHat, x0=np.zeros(3), ds=0.45, ls="-"):
 # Plot twice - one plot will be updated, the other one will stay as reference.
 plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat, ls="--")
 lns = plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat)
+texts = []
 
-sldr_ax1 = fig.add_axes([0.15, 0.01, 0.7, 0.025])
-sldr_ax2 = fig.add_axes([0.15, 0.05, 0.7, 0.025])
-sldr_ax3 = fig.add_axes([0.15, 0.09, 0.7, 0.025])
+sldr_ax1 = fig.add_axes([0.1, 0.09, 0.3, 0.025])
+sldr_ax2 = fig.add_axes([0.1, 0.05, 0.3, 0.025])
+sldr_ax3 = fig.add_axes([0.1, 0.01, 0.3, 0.025])
 sldrLim = 180
 sldr1 = Slider(sldr_ax1, 'phi', -sldrLim, sldrLim, valinit=0, valfmt="%.1f deg")
 sldr2 = Slider(sldr_ax2, 'theta', -sldrLim, sldrLim, valinit=0, valfmt="%.1f deg")
 sldr3 = Slider(sldr_ax3, 'psi', -sldrLim, sldrLim, valinit=0, valfmt="%.1f deg")
+sldr_ax4 = fig.add_axes([0.6, 0.09, 0.3, 0.025])
+sldr_ax5 = fig.add_axes([0.6, 0.05, 0.3, 0.025])
+sldr_ax6 = fig.add_axes([0.6, 0.01, 0.3, 0.025])
+sldrLim = 0.5
+sldr4 = Slider(sldr_ax4, 'Fg_x', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr5 = Slider(sldr_ax5, 'Fg_y', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr6 = Slider(sldr_ax6, 'Fg_z', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr_ax7 = fig.add_axes([0.6, 0.21, 0.3, 0.025])
+sldr_ax8 = fig.add_axes([0.6, 0.17, 0.3, 0.025])
+sldr_ax9 = fig.add_axes([0.6, 0.13, 0.3, 0.025])
+sldrLim = 0.5
+sldr7 = Slider(sldr_ax7, 'Fv_x', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr8 = Slider(sldr_ax8, 'Fv_y', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr9 = Slider(sldr_ax9, 'Fv_z', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
 
 def onChanged(val):
-    global rov, lns, ax
+    global rov, lns, texts, ax
+
     angles = np.array([sldr1.val, sldr2.val, sldr3.val])/180.*np.pi
     rov.updateMovingCoordSystem(angles)
+
+    Fglobal = np.array([sldr4.val, sldr5.val, sldr6.val])
+    # TODO make a routine for this.
+    Fgx = np.dot(Fglobal, rov.iHat)
+    Fgy = np.dot(Fglobal, rov.jHat)
+    Fgz = np.dot(Fglobal, rov.kHat)
+
+    Fv = np.array([sldr7.val, sldr8.val, sldr9.val])
+    # TODO make a routine for this.
+    Fvehicle = Fv[0]*rov.iHat + Fv[1]*rov.jHat + Fv[2]*rov.kHat
+
     for l in lns:
         l.remove()
+    for txt in texts:
+        txt.remove()
+
     lns = plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat)
-    ax.set_title(
-        "roll, pitch, yaw = " +", ".join(['{:.1f} deg'.format(v) for v in rov.computeRollPitchYaw()/np.pi*180.]))
+    lns += ax.plot([0, Fglobal[0]], [0, Fglobal[1]], [0, Fglobal[2]], "m--", lw=2)
+    lns += ax.plot([Fglobal[0]], [Fglobal[1]], [Fglobal[2]], "mo", ms=6)
+    lns += ax.plot([0, Fvehicle[0]], [0, Fvehicle[1]], [0, Fvehicle[2]], "c--", lw=2)
+    lns += ax.plot([Fvehicle[0]], [Fvehicle[1]], [Fvehicle[2]], "co", ms=6)
+
+    texts = [fig.text(0.5, 0.975,
+        "roll, pitch, yaw = " +", ".join(['{:.1f} deg'.format(v) for v in rov.computeRollPitchYaw()/np.pi*180.]),
+        va="center", ha="center"
+    )]
+
+    texts.append(fig.text(0.5, 0.94,
+        "Fg = " +", ".join(['{:.2f}'.format(v) for v in [Fgx, Fgy, Fgz]]),
+        va="center", ha="center"
+    ))
+
+    texts.append(fig.text(0.5, 0.905,
+        "Fv = " +", ".join(['{:.2f}'.format(v) for v in Fvehicle]),
+        va="center", ha="center"
+    ))
     return lns
 
-sldr1.on_changed(onChanged)
-sldr2.on_changed(onChanged)
-sldr3.on_changed(onChanged)
+sliders = [sldr1, sldr2, sldr3, sldr4, sldr5, sldr6]
+for sldr in sliders:
+    sldr.on_changed(onChanged)
 
 plt.show()
