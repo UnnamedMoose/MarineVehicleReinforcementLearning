@@ -24,6 +24,38 @@ class RovTemp(object):
         # array for ease of use.
         self.iHat, self.jHat, self.kHat = self.getCoordSystem()
 
+        # Thruster geometry.
+        self.alphaThruster = 45./180.*np.pi # Angle between each horizontal thruster axes and centreline (0 fwd)
+        self.l_x = 0.156 # Moment arms [m] # +++
+        self.l_y = 0.111
+        self.l_z = 0.085
+        self.l_x_v = 0.120
+        self.l_y_v = 0.218
+        self.l_z_v = 0.0  # irrelevant
+
+        # Use pseudo-inverse of the control allocation matrix in order to go from
+        # desired generalised forces to actuator demands in rpm.
+        # NOTE the original 3 DoF notation is inconsistent with page 48 in Wu (2018),
+        # what follows is (or should be) the same. See Figure 4.2 and Eq. 4.62 in their work.
+        self.A = np.zeros((6, 8))
+        self.A[:, 0] = [np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
+            np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
+            -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
+        self.A[:, 1] = [np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
+            -np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
+            np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
+        self.A[:, 2] = [-np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
+            np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
+            np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
+        self.A[:, 3] = [-np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
+            -np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
+            -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
+        self.A[:, 4] = [0., 0., -1., -self.l_y_v, self.l_x_v, 0.]
+        self.A[:, 5] = [0., 0., 1., -self.l_y_v, -self.l_x_v, 0.]
+        self.A[:, 6] = [0., 0., 1., self.l_y_v, self.l_x_v, 0.]
+        self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
+        self.Ainv = np.linalg.pinv(self.A)
+
     def getCoordSystem(self):
         # iHat, jHat, kHat
         return self.vehicleAxes.T
@@ -44,6 +76,15 @@ class RovTemp(object):
         self.vehicleAxes = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix()
         # Extract the new coordinate system vectors
         self.iHat, self.jHat, self.kHat = self.getCoordSystem()
+
+    def globalToVehicle(self, vecGlobal):
+        return np.array([
+            np.dot(vecGlobal, self.iHat),
+            np.dot(vecGlobal, self.jHat),
+            np.dot(vecGlobal, self.kHat)])
+
+    def vehicleToGlobal(self, vecVehicle):
+        return vecVehicle[0]*self.iHat + vecVehicle[1]*self.jHat + vecVehicle[2]*self.kHat
 
 rov = RovTemp()
 
@@ -88,9 +129,18 @@ sldrLim = 0.5
 sldr4 = Slider(sldr_ax4, 'Fg_x', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
 sldr5 = Slider(sldr_ax5, 'Fg_y', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
 sldr6 = Slider(sldr_ax6, 'Fg_z', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
-sldr_ax7 = fig.add_axes([0.6, 0.21, 0.3, 0.025])
-sldr_ax8 = fig.add_axes([0.6, 0.17, 0.3, 0.025])
-sldr_ax9 = fig.add_axes([0.6, 0.13, 0.3, 0.025])
+
+sldr_ax10 = fig.add_axes([0.6, 0.21, 0.3, 0.025])
+sldr_ax11 = fig.add_axes([0.6, 0.17, 0.3, 0.025])
+sldr_ax12 = fig.add_axes([0.6, 0.13, 0.3, 0.025])
+sldrLim = 0.5
+sldr10 = Slider(sldr_ax10, 'Mg_x', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr11 = Slider(sldr_ax11, 'Mg_y', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+sldr12 = Slider(sldr_ax12, 'Mg_z', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
+
+sldr_ax7 = fig.add_axes([0.1, 0.21, 0.3, 0.025])
+sldr_ax8 = fig.add_axes([0.1, 0.17, 0.3, 0.025])
+sldr_ax9 = fig.add_axes([0.1, 0.13, 0.3, 0.025])
 sldrLim = 0.5
 sldr7 = Slider(sldr_ax7, 'Fv_x', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
 sldr8 = Slider(sldr_ax8, 'Fv_y', -sldrLim, sldrLim, valinit=0.2, valfmt="%.2f")
@@ -102,15 +152,13 @@ def onChanged(val):
     angles = np.array([sldr1.val, sldr2.val, sldr3.val])/180.*np.pi
     rov.updateMovingCoordSystem(angles)
 
-    Fglobal = np.array([sldr4.val, sldr5.val, sldr6.val])
-    # TODO make a routine for this.
-    Fgx = np.dot(Fglobal, rov.iHat)
-    Fgy = np.dot(Fglobal, rov.jHat)
-    Fgz = np.dot(Fglobal, rov.kHat)
+    # Resolve force in the global coordinates to the vehicle axes.
+    Fg = np.array([sldr4.val, sldr5.val, sldr6.val])
+    Fglobal = rov.globalToVehicle(Fg)
 
+    # Resolve force in vehicle coordinates to the global coordinates.
     Fv = np.array([sldr7.val, sldr8.val, sldr9.val])
-    # TODO make a routine for this.
-    Fvehicle = Fv[0]*rov.iHat + Fv[1]*rov.jHat + Fv[2]*rov.kHat
+    Fvehicle = rov.vehicleToGlobal(Fv)
 
     for l in lns:
         l.remove()
@@ -118,8 +166,8 @@ def onChanged(val):
         txt.remove()
 
     lns = plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat)
-    lns += ax.plot([0, Fglobal[0]], [0, Fglobal[1]], [0, Fglobal[2]], "m--", lw=2)
-    lns += ax.plot([Fglobal[0]], [Fglobal[1]], [Fglobal[2]], "mo", ms=6)
+    lns += ax.plot([0, Fg[0]], [0, Fg[1]], [0, Fg[2]], "m--", lw=2)
+    lns += ax.plot([Fg[0]], [Fg[1]], [Fg[2]], "mo", ms=6)
     lns += ax.plot([0, Fvehicle[0]], [0, Fvehicle[1]], [0, Fvehicle[2]], "c--", lw=2)
     lns += ax.plot([Fvehicle[0]], [Fvehicle[1]], [Fvehicle[2]], "co", ms=6)
 
@@ -129,17 +177,17 @@ def onChanged(val):
     )]
 
     texts.append(fig.text(0.5, 0.94,
-        "Fg = " +", ".join(['{:.2f}'.format(v) for v in [Fgx, Fgy, Fgz]]),
+        "Fg in local reference frame = " +", ".join(['{:.2f}'.format(v) for v in Fglobal]),
         va="center", ha="center"
     ))
 
     texts.append(fig.text(0.5, 0.905,
-        "Fv = " +", ".join(['{:.2f}'.format(v) for v in Fvehicle]),
+        "Fv in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Fvehicle]),
         va="center", ha="center"
     ))
     return lns
 
-sliders = [sldr1, sldr2, sldr3, sldr4, sldr5, sldr6]
+sliders = [sldr1, sldr2, sldr3, sldr4, sldr5, sldr6, sldr7, sldr8, sldr9, sldr10, sldr11, sldr12]
 for sldr in sliders:
     sldr.on_changed(onChanged)
 
