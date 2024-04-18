@@ -156,6 +156,17 @@ def onChanged(val):
     Fg = np.array([sldr4.val, sldr5.val, sldr6.val])
     Fglobal = rov.globalToVehicle(Fg)
 
+    # TODO resolve moments to the vehicle axes.
+    Mg = np.array([sldr10.val, sldr11.val, sldr12.val])
+    Mglobal = Mg
+
+    # Combine generalised control forces and moments into one vector.
+    generalisedControlForces = np.append(Fglobal, Mglobal)
+
+    # Translate into force demands for each thruster using the inverse of the thrust
+    # allocation matrix.
+    cv = np.matmul(rov.Ainv, generalisedControlForces)
+
     # Resolve force in vehicle coordinates to the global coordinates.
     Fv = np.array([sldr7.val, sldr8.val, sldr9.val])
     Fvehicle = rov.vehicleToGlobal(Fv)
@@ -185,6 +196,26 @@ def onChanged(val):
         "Fv in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Fvehicle]),
         va="center", ha="center"
     ))
+
+    # Plot the thruster positions.
+    thrusterPositions = np.array([
+        [rov.l_x, rov.l_y, rov.l_z],
+        [rov.l_x, -rov.l_y, rov.l_z],
+        [-rov.l_x, rov.l_y, rov.l_z],
+        [-rov.l_x, -rov.l_y, rov.l_z],
+        [rov.l_x_v, rov.l_y_v, rov.l_z_v],
+        [rov.l_x_v, -rov.l_y_v, rov.l_z_v],
+        [-rov.l_x_v, rov.l_y_v, rov.l_z_v],
+        [-rov.l_x_v, -rov.l_y_v, rov.l_z_v],
+    ])
+    for i in range(thrusterPositions.shape[0]):
+        xt = rov.vehicleToGlobal(thrusterPositions[i, :])
+        lns += ax.plot(xt[0], xt[1], xt[2], "k.", ms=5)
+        # TODO vertical thruster axes are the other way around. Do all of this in NED!
+        tVec = rov.vehicleToGlobal(rov.A[:3, i]*0.2)
+        lns += ax.plot([xt[0], xt[0]+tVec[0]], [xt[1], xt[1]+tVec[1]], [xt[2], xt[2]+tVec[2]], "k-", lw=2)
+        texts.append(ax.text(xt[0], xt[1], xt[2], "{:d}".format(i+1)))
+
     return lns
 
 sliders = [sldr1, sldr2, sldr3, sldr4, sldr5, sldr6, sldr7, sldr8, sldr9, sldr10, sldr11, sldr12]
