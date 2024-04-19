@@ -14,15 +14,55 @@ from matplotlib.widgets import Slider
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+def coordTransform6dof(angles):
+    phi, theta, psi = angles
+
+    cosThetaDenom = np.cos(theta)
+    if np.abs(cosThetaDenom) < 1e-12:
+        cosThetaDenom = 1e-6
+    elif np.abs(cosThetaDenom) < 1e-6:
+        cosThetaDenom = 1e-6 * np.sign(cosThetaDenom)
+
+    J1 = np.array([
+        [np.cos(psi)*np.cos(theta), -np.sin(psi)*np.cos(phi) + np.cos(psi)*np.sin(theta)*np.sin(phi),
+            np.sin(psi)*np.sin(phi) + np.cos(psi)*np.sin(theta)*np.sin(phi)],
+        [np.sin(psi)*np.cos(theta), np.cos(psi)*np.cos(phi) + np.sin(psi)*np.sin(theta)*np.sin(phi),
+            -np.cos(psi)*np.sin(phi) + np.sin(psi)*np.sin(theta)*np.cos(phi)],
+        [-np.sin(theta), np.cos(theta)*np.sin(phi), np.cos(theta)*np.cos(phi)],
+    ])
+
+    J2 = np.array([
+        [1., np.sin(phi)*np.sin(theta)/cosThetaDenom, np.cos(phi)*np.sin(theta)/cosThetaDenom],
+        [0., np.cos(phi), -np.sin(phi)],
+        [0., np.sin(phi)/cosThetaDenom, np.cos(phi)/cosThetaDenom],
+    ])
+
+    coordTransform = np.array([
+        [J1[0,0], J1[0,1], J1[0,2], 0., 0., 0.],
+        [J1[1,0], J1[1,1], J1[1,2], 0., 0., 0.],
+        [J1[2,0], J1[2,1], J1[2,2], 0., 0., 0.],
+        [0., 0., 0., J2[0,0], J2[0,1], J2[0,2]],
+        [0., 0., 0., J2[1,0], J2[1,1], J2[1,2]],
+        [0., 0., 0., J2[2,0], J2[2,1], J2[2,2]],
+    ])
+
+    return coordTransform
+
 class RovTemp(object):
     def __init__(self):
-        # Main part - rotation matrix around the the global coordinate system axes.
-        self.vehicleAxes = np.eye(3)
-        # Current roll, pitch, yaw
-        self.rotation_angles = np.zeros(3)
-        # Unit vectors along the vehicle x, y, z axes unpacked from the aggregate
-        # array for ease of use.
-        self.iHat, self.jHat, self.kHat = self.getCoordSystem()
+        # # # Main part - rotation matrix around the the global coordinate system axes.
+        # # self.vehicleAxes = np.eye(3)
+        # # Current roll, pitch, yaw
+        # self.rotation_angles = np.zeros(3)
+        # # Unit vectors along the vehicle x, y, z axes unpacked from the aggregate
+        # # array for ease of use.
+        # self.iHat, self.jHat, self.kHat = np.eye(3)#self.getCoordSystem()
+        # # Initialise coordinate transform matrix and its inverse.
+        # self.Jmatrix = coordTransform6dof(self.rotation_angles)
+        # self.invJmatrix = np.linalg.pinv(self.Jmatrix)
+
+        # Set the coordinate transform matrix, its inverse, and vehicle axes unit vectors.
+        self.updateMovingCoordSystem(np.zeros(3))
 
         # Thruster geometry.
         self.alphaThruster = 45./180.*np.pi # Angle between each horizontal thruster axes and centreline (0 fwd)
@@ -68,9 +108,9 @@ class RovTemp(object):
         self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
         self.Ainv = np.linalg.pinv(self.A)
 
-    def getCoordSystem(self):
-        # iHat, jHat, kHat
-        return self.vehicleAxes.T
+    # def getCoordSystem(self):
+    #     # iHat, jHat, kHat
+    #     return self.vehicleAxes.T
 
     def computeRollPitchYaw(self):
         # Compute the global roll, pitch, and yaw angles.
@@ -84,32 +124,24 @@ class RovTemp(object):
     def updateMovingCoordSystem(self, rotation_angles):
         # Store the current orientation.
         self.rotation_angles = rotation_angles
-        # Create quaternion from rotation angles from (roll pitch yaw)
-        self.vehicleAxes = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix()
+        # Create new vehicle axes from rotation angles (roll pitch yaw)
+        self.iHat, self.jHat, self.kHat = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix().T
         # Extract the new coordinate system vectors
-        self.iHat, self.jHat, self.kHat = self.getCoordSystem()
+        # self.iHat, self.jHat, self.kHat = self.getCoordSystem()
 
-    def angularTransform(self, moments, rotation_angles, toWhatFrame):
-        # TODO replace with scipy if possible to keep this clean.
-        phi, theta, psi = rotation_angles
+        # # Update vehicle axes.
+        # self.iHat = np.dot(self.Jmatrix[:3, :3], np.array([1., 0., 0.]))
+        # self.jHat = np.dot(self.Jmatrix[:3, :3], np.array([0., 1., 0.]))
+        # self.kHat = np.dot(self.Jmatrix[:3, :3], np.array([0., 0., 1.]))
 
-        cosThetaDenom = np.cos(theta)
-        if np.abs(cosThetaDenom) < 1e-12:
-            cosThetaDenom = 1e-6
-        elif np.abs(cosThetaDenom) < 1e-6:
-            cosThetaDenom = 1e-6 * np.sign(cosThetaDenom)
-
-        J2 = np.array([
-            [1., np.sin(phi)*np.sin(theta)/cosThetaDenom, np.cos(phi)*np.sin(theta)/cosThetaDenom],
-            [0., np.cos(phi), -np.sin(phi)],
-            [0., np.sin(phi)/cosThetaDenom, np.cos(phi)/cosThetaDenom],
-        ])
+    def applyMotionTransform(self, v_6, toWhatFrame):
+        Jmatrix = coordTransform6dof(self.rotation_angles)
 
         if toWhatFrame == "toVehicle":
-            invJtransform = np.linalg.pinv(J2)
-            return np.matmul(invJtransform, moments)
+            invJmatrix = np.linalg.pinv(Jmatrix)
+            return np.matmul(invJmatrix, v_6)
         elif toWhatFrame == "toGlobal":
-            return np.dot(J2, moments)
+            return np.dot(Jmatrix, v_6)
         else:
             raise ValueError("what?")
 
@@ -187,19 +219,29 @@ sldr12 = Slider(sldr_ax12, 'Mg_z', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
 def onChanged(val):
     global rov, lns, texts, ax
 
+    # Update the orientation of the vehicle.
     angles = np.array([sldr1.val, sldr2.val, sldr3.val])/180.*np.pi
     rov.updateMovingCoordSystem(angles)
 
-    # Resolve force in the global coordinates to the vehicle axes.
+    # Get the force and moment demands.
     Fg = np.array([sldr4.val, sldr5.val, sldr6.val])
-    Fglobal = rov.globalToVehicle(Fg)
-
-    # Resolve moments to the vehicle axes.
     Mg = np.array([sldr10.val, sldr11.val, sldr12.val])
-    Mglobal = rov.angularTransform(Mg, angles, "toVehicle")
+    # Resolve force in the vehicle axes.
+    Fglobal = rov.globalToVehicle(Fg)
+    Mglobal = rov.globalToVehicle(Mg)
+    # Mglobal = rov.angularTransform(Mg, angles, "toVehicle")
 
     # Combine generalised control forces and moments into one vector.
     generalisedControlForces = np.append(Fglobal, Mglobal)
+    print("===")
+    print(np.append(Fg, Mg))
+    print(generalisedControlForces)
+    # # Resolve to the vehicle reference frame
+    # # TODO this doesn't work
+    # generalisedControlForces = rov.applyTransform(generalisedControlForces, "toVehicle")
+    # print(generalisedControlForces)
+    # # Extract the moment demands in the vehicle reference frame.
+    # Mglobal = generalisedControlForces[3:]
 
     # Translate into force demands for each thruster using the inverse of the thrust
     # allocation matrix.
@@ -220,20 +262,24 @@ def onChanged(val):
     lns += ax.plot([Fg[0]], [Fg[1]], [Fg[2]], "mo", ms=6)
 
     # Plot the thruster positions and actuation.
-    H = np.zeros(6)
+    Fh, Mh = np.zeros(3), np.zeros(3)
     for i in range(rov.thrusterPositions.shape[0]):
         xt = rov.vehicleToGlobal(rov.thrusterPositions[i, :])
         tVec = rov.vehicleToGlobal(rov.A[:3, i]*cv[i])
-        H += rov.A[:, i]*cv[i]
+        Fh += rov.A[:3, i]*cv[i]
+        Mh += rov.A[3:, i]*cv[i]
 
         lns += ax.plot(xt[0], xt[1], xt[2], "ks", ms=5)
         texts.append(ax.text(xt[0], xt[1], xt[2], "{:d}".format(i+1)))
         lns += ax.plot([xt[0], xt[0]+tVec[0]], [xt[1], xt[1]+tVec[1]], [xt[2], xt[2]+tVec[2]], "k-", alpha=0.5, lw=2)
 
     # Compute net actuation in the global reference frame.
-    Hglobal = np.append(
-        rov.vehicleToGlobal(H[:3]),
-        rov.angularTransform(H[3:], angles, "toGlobal"))
+    Fhglobal = rov.vehicleToGlobal(Fh)
+    Mhglobal = rov.vehicleToGlobal(Mh)
+    # Hglobal = rov.applyTransform(H, "toGlobal")
+    # np.append(
+        # rov.vehicleToGlobal(H[:3]),
+        # rov.angularTransform(H[3:], angles, "toGlobal"))
 
     # lns += ax.plot([0, Fvehicle[0]], [0, Fvehicle[1]], [0, Fvehicle[2]], "c--", lw=2)
     # lns += ax.plot([Fvehicle[0]], [Fvehicle[1]], [Fvehicle[2]], "co", ms=6)
@@ -251,11 +297,15 @@ def onChanged(val):
     #     va="center", ha="center"
     # ))
     texts.append(fig.text(0.5, 0.94,
-        "Total forces and moments in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Hglobal]),
+        "Target forces and moments in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in generalisedControlForces]),
         va="center", ha="center"
     ))
     texts.append(fig.text(0.5, 0.905,
-        "Total forces and moments in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in H]),
+        "Total forces and moments in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in np.append(Fhglobal, Mhglobal)]),
+        va="center", ha="center"
+    ))
+    texts.append(fig.text(0.5, 0.87,
+        "Total forces and moments in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in np.append(Fh, Mh)]),
         va="center", ha="center"
     ))
 
