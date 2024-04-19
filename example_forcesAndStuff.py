@@ -109,7 +109,6 @@ class RovTemp(object):
             invJtransform = np.linalg.pinv(J2)
             return np.matmul(invJtransform, moments)
         elif toWhatFrame == "toGlobal":
-            print(J2, moments)
             return np.dot(J2, moments)
         else:
             raise ValueError("what?")
@@ -239,24 +238,24 @@ def onChanged(val):
     # lns += ax.plot([0, Fvehicle[0]], [0, Fvehicle[1]], [0, Fvehicle[2]], "c--", lw=2)
     # lns += ax.plot([Fvehicle[0]], [Fvehicle[1]], [Fvehicle[2]], "co", ms=6)
 
-    texts.append([fig.text(0.5, 0.975,
+    texts.append(fig.text(0.5, 0.975,
         "roll, pitch, yaw = " +", ".join(['{:.1f} deg'.format(v) for v in rov.computeRollPitchYaw()/np.pi*180.]),
         va="center", ha="center"
-    )])
-    texts.append(fig.text(0.5, 0.94,
-        "Fg and Mg in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in np.append(Fglobal, Mglobal)]),
-        va="center", ha="center"
     ))
+    # texts.append(fig.text(0.5, 0.94,
+    #     "Fg and Mg in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in np.append(Fglobal, Mglobal)]),
+    #     va="center", ha="center"
+    # ))
     # texts.append(fig.text(0.5, 0.905,
     #     "Fv in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Fvehicle]),
     #     va="center", ha="center"
     # ))
-    texts.append(fig.text(0.5, 0.905,
-        "Total forces and moments in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in H]),
+    texts.append(fig.text(0.5, 0.94,
+        "Total forces and moments in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Hglobal]),
         va="center", ha="center"
     ))
-    texts.append(fig.text(0.5, 0.87,
-        "Total forces and moments in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Hglobal]),
+    texts.append(fig.text(0.5, 0.905,
+        "Total forces and moments in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in H]),
         va="center", ha="center"
     ))
 
