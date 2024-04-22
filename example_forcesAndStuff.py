@@ -76,7 +76,7 @@ class RovTemp(object):
         self.l_y_v = 0.22
         self.l_z_v = 0.0  # irrelevant
 
-        # Thrister positions in the vehicle reference frame. Consistent with Wu (2018) fig 4.2
+        # Thruster positions in the vehicle reference frame. Consistent with Wu (2018) fig 4.2
         self.thrusterPositions = np.array([
             [self.l_x, self.l_y, self.l_z],
             [self.l_x, -self.l_y, self.l_z],

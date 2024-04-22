@@ -12,7 +12,7 @@ import os
 import re
 from mpl_toolkits.mplot3d import Axes3D
 import scipy.integrate
-# import gym
+from scipy.spatial.transform import Rotation
 
 font = {"family": "serif",
         "weight": "normal",
@@ -21,7 +21,7 @@ font = {"family": "serif",
 matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
-from resources import headingError, coordinateTransform
+import resources
 
 class BlueROV2Heavy6DoF:
     def __init__(self, setPoint):
@@ -53,6 +53,9 @@ class BlueROV2Heavy6DoF:
             [0., 0.16,  0.],
             [0., 0., 0.16],
         ])
+
+        # CB offset - used for exporting data only. NED.
+        self.x_origin = np.array([0., 0., 0.0375])
 
         # ===
         # Manoeuvring coefficients.
@@ -116,12 +119,20 @@ class BlueROV2Heavy6DoF:
         # ===
         # Thruster.
         self.D_thruster = 0.1 # Diameter of thrusters # +++
-        self.alphaThruster = 45./180.*np.pi # Angle between each horizontal thruster axes and centreline (0 fwd)
-        self.l_x = 0.156 # Moment arms [m] # +++
-        self.l_y = 0.111
-        self.l_z = 0.085
+        # Angle between each horizontal thruster axes and centreline (0 fwd)
+        # Wu (2018) says it's 45 degrees but this doesn't match the geometry.
+        self.alphaThruster = 33./180.*np.pi
+        # These are actually further inwards than Wu says.
+        # self.l_x = 0.156
+        # self.l_y = 0.111
+        self.l_x = 0.1475
+        self.l_y = 0.101
+        # 85 mm comes from Wu (2018) but doesn't match the real geometry
+        # self.l_z = 0.085
+        self.l_z = 0.068
         self.l_x_v = 0.120
-        self.l_y_v = 0.218
+        # self.l_y_v = 0.218
+        self.l_y_v = 0.22
         self.l_z_v = 0.0  # irrelevant
 
         # Back-calculated from max rpm at 16 V from datasheet:
@@ -134,6 +145,18 @@ class BlueROV2Heavy6DoF:
 
         # Motor rpms
         self.controlVector = np.zeros(8)
+
+        # Thruster positions in the vehicle reference frame. Consistent with Wu (2018) fig 4.2
+        self.thrusterPositions = np.array([
+            [self.l_x, self.l_y, self.l_z],
+            [self.l_x, -self.l_y, self.l_z],
+            [-self.l_x, self.l_y, self.l_z],
+            [-self.l_x, -self.l_y, self.l_z],
+            [self.l_x_v, self.l_y_v, self.l_z_v],
+            [self.l_x_v, -self.l_y_v, self.l_z_v],
+            [-self.l_x_v, self.l_y_v, self.l_z_v],
+            [-self.l_x_v, -self.l_y_v, self.l_z_v],
+        ])
 
         # Use pseudo-inverse of the control allocation matrix in order to go from
         # desired generalised forces to actuator demands in rpm.
@@ -165,30 +188,33 @@ class BlueROV2Heavy6DoF:
         #     print(", ".join(["{:.6e}".format(v) for v in self.Ainv[i,:]]))
 
     def thrusterModel(self, rpm):
-        #  u, v,
-        """ Compute the force delivered by a thruster. """
-
         # Force delivered when at rest.
         Fthruster = self.rho_f * (rpm/60.)**2. * np.sign(rpm) * self.D_thruster**4. * self.Kt_thruster
+        return Fthruster
 
-        # Jet velocity and associated drag augment. From Kantapon's work.
-        # TODO think whether or not to incldue this.
-        # uJet = np.sqrt(np.abs(Fthruster) / (0.5*self.rho_f*np.pi*self.D_thruster**2))
-        # deltaCdFwd = 0.56599 * np.exp(-7.60891*np.abs(u)/max(1e-5, uJet)) \
-        #     + 0.05654 * np.exp(-0.89679*np.abs(u)/max(1e-5, uJet))
-        # Xthruster = deltaCdFwd * -0.5*self.rho_f*np.abs(u)*u*self.dispVol**(2./3.)
+    def updateMovingCoordSystem(self, rotation_angles):
+        # Store the current orientation.
+        self.rotation_angles = rotation_angles
+        # Create new vehicle axes from rotation angles (roll pitch yaw)
+        self.iHat, self.jHat, self.kHat = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix().T
 
-        return Fthruster#, Xthruster
+    def globalToVehicle(self, vecGlobal):
+        return np.array([
+            np.dot(vecGlobal, self.iHat),
+            np.dot(vecGlobal, self.jHat),
+            np.dot(vecGlobal, self.kHat)])
+
+    def vehicleToGlobal(self, vecVehicle):
+        return vecVehicle[0]*self.iHat + vecVehicle[1]*self.jHat + vecVehicle[2]*self.kHat
 
     def derivs(self, t, state):
 
         # Unpack the satate
-        x, y, z, theta, phi, psi, u, v, w, p, q, r = state
+        x, y, z, phi, theta, psi, u, v, w, p, q, r = state
         vel = np.array([u, v, w, p, q, r])
 
-        # Compute the coordinate transform to go from local to global coords.
-        Jtransform = coordinateTransform(phi, theta, psi, dof=6)
-        invJtransform = np.linalg.pinv(Jtransform)
+        # Set the vehicle axes.
+        self.updateMovingCoordSystem(np.array([phi, theta, psi]))
 
         # Generalised forces and moments from the controller
         windup = np.array([2., 2., 2., 90./180.*np.pi, 90./180.*np.pi, 90./180.*np.pi])
@@ -196,9 +222,9 @@ class BlueROV2Heavy6DoF:
         K_I = np.array([0.1, 0.1, 0.1, 0.01, 0.01, 0.01])
         K_D = np.array([5., 5., 5., 0.1, 0.1, 0.1])
         e = np.append(self.setPoint[:3] - np.array([x, y, z]),
-                      [headingError(self.setPoint[3], theta),
-                      headingError(self.setPoint[4], phi),
-                      headingError(self.setPoint[5], psi)])
+                      [resources.headingError(self.setPoint[3], phi),
+                      resources.headingError(self.setPoint[4], theta),
+                      resources.headingError(self.setPoint[5], psi)])
         if self.eOld is None:
             self.eOld = e.copy()
         dedt = (e - self.eOld) / max(1e-9, t - self.tOld)
@@ -211,7 +237,9 @@ class BlueROV2Heavy6DoF:
         self.tOld = t
 
         # Resolve into the vehicle reference frame before force allocation.
-        self.generalisedControlForces = np.matmul(invJtransform, controlValues)
+# self.generalisedControlForces = np.matmul(invJtransform, controlValues)
+        self.generalisedControlForces = np.append(
+            self.globalToVehicle(controlValues[:3]), self.globalToVehicle(controlValues[3:]))
 
         # Go from forces to rpm.
         cv = np.matmul(self.Ainv, self.generalisedControlForces)  # Newtons
@@ -237,7 +265,8 @@ class BlueROV2Heavy6DoF:
 
         # Resolve the current into the vehicle reference frame.
         if np.linalg.norm(velCurrent) > 0.:
-            velCurrent = np.matmul(invJtransform, velCurrent)
+# velCurrent = np.matmul(invJtransform, velCurrent)
+            velCurrent = self.globalToVehicle(velCurrent)
 
         # Relative fluid velocity. For added mass, assume rate of change of fluid
         # velocity is much smaller than that of the vehicle, hence d/dt(v-vc) = dv/dt.
@@ -361,15 +390,19 @@ class BlueROV2Heavy6DoF:
 
         # ===
         # Solve M*acc = F for accelerations
+        # This is done in the vehicle reference frame.
         acc = np.linalg.solve(M, RHS)
 
         # ===
+        # Compute the coordinate transform to go from local to global coords.
+        Jtransform = resources.coordinateTransform(phi, theta, psi, dof=6)
+# invJtransform = np.linalg.pinv(Jtransform)
         # Apply a coordinate transformation to get velocities in the global coordinates.
         # After the integration this will yield displacements in the global coordinates.
         vel = np.dot(Jtransform, vel)
 
-        acc[3:5] = 0.
-        vel[3:5] = 0.
+        # acc[3:5] = 0.
+        # vel[3:5] = 0.
 
         # ===
         # Return derivatives of the system along each degree of freedom. The first
@@ -379,223 +412,6 @@ class BlueROV2Heavy6DoF:
         # in the body reference frame.
         return np.append(vel, acc)
 
-    def plot_horizontal(self, ax, x, y, psi, psiD, forces, scale=1, markerSize=1, arrowSize=1, vehicleColour="y"):
-        """ Plot a representation of the AUV on the given axes.
-        Thuster forces should be non-dimensionalised with maximum value. """
-
-        x0 = np.array([x, y])
-
-        xyHull = np.array([
-            [self.Length/2.,                  -self.Width/2.+self.D_thruster],
-            [self.Length/2.,                   self.Width/2.-self.D_thruster],
-            [self.Length/2.-self.D_thruster,   self.Width/2.],
-            [-self.Length/2.+self.D_thruster,  self.Width/2.],
-            [-self.Length/2.,                  self.Width/2.-self.D_thruster],
-            [-self.Length/2.,                 -self.Width/2.+self.D_thruster],
-            [-self.Length/2.+self.D_thruster, -self.Width/2.],
-            [self.Length/2.-self.D_thruster,  -self.Width/2.],
-            [self.Length/2.,                  -self.Width/2.+self.D_thruster],
-        ])
-
-        xyThrusters = np.array([
-            [self.Length/2. - self.D_thruster/2.*np.sin(self.alphaThruster),
-                -self.Width/2. + self.D_thruster/2.*np.cos(self.alphaThruster)],
-            [-self.Length/2. + self.D_thruster/2.*np.sin(self.alphaThruster),
-                -self.Width/2. + self.D_thruster/2.*np.cos(self.alphaThruster)],
-            [self.Length/2. - self.D_thruster/2.*np.sin(self.alphaThruster),
-                self.Width/2. - self.D_thruster/2.*np.cos(self.alphaThruster)],
-            [-self.Length/2. + self.D_thruster/2.*np.sin(self.alphaThruster),
-                self.Width/2. - self.D_thruster/2.*np.cos(self.alphaThruster)]
-        ])
-
-        xyCentreline = np.array([
-            [np.min(xyHull[:,0]), 0.],
-            [np.max(xyHull[:,0]), 0.],
-        ])
-
-        xyDir = np.array([
-            [self.Length/2.-self.Width/4., -self.Width/4.],
-            [self.Length/2., 0.],
-            [self.Length/2.-self.Width/4., self.Width/4.],
-        ])
-
-        F = np.array([
-            [forces[0]*np.cos(self.alphaThruster), forces[0]*np.sin(self.alphaThruster)],
-            [forces[1]*np.cos(self.alphaThruster), -forces[1]*np.sin(self.alphaThruster)],
-            [-forces[2]*np.cos(self.alphaThruster), forces[2]*np.sin(self.alphaThruster)],
-            [-forces[3]*np.cos(self.alphaThruster), -forces[3]*np.sin(self.alphaThruster)],
-        ])
-
-        def rotate(xy, psi):
-            xyn = np.zeros(xy.shape)
-            xyn[:,0] = np.cos(psi)*xy[:,0] - np.sin(psi)*xy[:,1]
-            xyn[:,1] = np.sin(psi)*xy[:,0] + np.cos(psi)*xy[:,1]
-            return xyn
-
-        xyHull = rotate(xyHull*scale, psi) + x0
-        xyThrusters = rotate(xyThrusters*scale, psi) + x0
-        xyCentreline = rotate(xyCentreline*scale, psi) + x0
-        xyDir = rotate(xyDir*scale, psi) + x0
-        F = rotate(F, psi)
-
-        objects = []
-        objects += ax.fill(xyHull[:,1], xyHull[:,0], vehicleColour, alpha=0.5)
-        objects += ax.plot(xyCentreline[:,1], xyCentreline[:,0], "k--", lw=2*markerSize)
-        objects += ax.plot(xyDir[:,1], xyDir[:,0], "k-", lw=2*markerSize)
-        objects += ax.plot(x0[1], x0[0], "ko", mew=3, mfc="None", ms=14*markerSize)
-        objects += ax.plot(xyThrusters[:,1], xyThrusters[:,0], "k.", ms=8)
-
-        for i in range(4):
-            if np.abs(forces[i]) > 0:
-                objects.append( ax.arrow(xyThrusters[i,1], xyThrusters[i,0], F[i,1]*scale, F[i,0]*scale, color="b",
-                        width=0.002*self.Length*scale/2.*arrowSize, lw=2*arrowSize) )
-
-        uD = np.array([np.sin(psiD), np.cos(psiD)])*self.Length/2.
-        objects.append( ax.arrow(x0[1], x0[0], uD[0]*scale, uD[1]*scale, color="r",
-                width=0.002*self.Length*scale/2.*arrowSize, lw=2*arrowSize) )
-
-        return objects
-
-# class BlueROV2Heavy3DoFEnv(gym.Env):
-#     def __init__(self, seed=None, dt=0.2, maxSteps=250):
-#         # Call base class constructor.
-#         super(BlueROV2Heavy3DoFEnv, self).__init__()
-#
-#         # Set common stuff.
-#         self.seed = seed
-#         self.dt = dt
-#         self._max_episode_steps = maxSteps
-#
-#         # Define the action space.
-#         self.lenAction = 3
-#         self.action_space = gym.spaces.Box(
-#             low=-1.0, high=1.0, shape=(self.lenAction,), dtype=np.float32)
-#
-#         # Define the observation space.
-#         self.lenObs = 5
-#         self.observation_space = gym.spaces.Box(
-#             -1*np.ones(self.lenObs, dtype=np.float32),
-#             np.ones(self.lenObs, dtype=np.float32),
-#             shape=(self.lenObs,))
-#
-#     def dataToState(self, systemState):
-#         # Need to translate the system state (positions, velocities, etc.)
-#         # into the RL agent's state.
-#         return np.clip([
-#             # Dimensionless vector to target.
-#             (self.path[self.iWp, 0]-systemState[0]) / (self.vehicle.Length*3.),
-#             (self.path[self.iWp, 1]-systemState[1]) / (self.vehicle.Length*3.),
-#             # To the following waypoint for path following
-#             (self.path[self.iWp+1, 0]-systemState[0]) / (self.vehicle.Length*3.),
-#             (self.path[self.iWp+1, 1]-systemState[1]) / (self.vehicle.Length*3.),
-#             # Heading error
-#             headingError(self.vehicle.setPoint[2], systemState[2]) / (45./180.*np.pi)
-#         ], -1., 1.)
-#
-#     def reset(self, initialSetpoint=None):
-#         if self.seed is not None:
-#             self._np_random, self.seed = gym.utils.seeding.np_random(self.seed)
-#
-#         self.iStep = 0
-#         self.time = 0.
-#
-#         if initialSetpoint is None:
-#             # Generate a path consisting of two-point segments
-#             # with a random heading for both waypoints.
-#             nWps = 2
-#             self.iWp = 0
-#             self.path = (np.random.rand(2*nWps).reshape((nWps, 2))-[0.5, 0.5])*[10., 10.]
-#             self.targetHeading = np.random.rand()*2.*np.pi
-#             # The initial set point is the firs point on the path.
-#             sp = np.append(self.path[0, :], self.targetHeading)
-#             self.fixedSp = False
-#         else:
-#             # Set up the vehicle with a fixed initial waypoint and desired heading.
-#             # Doing so should allow a dummy agent to be used such that simple A->B
-#             # behaviour could be simulated. This can be used for the tuning of the
-#             # controller and testing of system dynamics.
-#             sp = np.array(initialSetpoint)
-#             self.iWp = 0
-#             self.path = np.vstack([sp[:2], sp[:2]])
-#             self.targetHeading = sp[2]
-#             self.fixedSp = True
-#
-#         # Create a vehicle instance with an initial set point.
-#         self.vehicle = BlueROV2Heavy3DoF(sp)
-#
-#         # Set the initial conditions.
-#         self.systemState = np.array([0., 0., 0./180.*np.pi, 0., 0., 0.])
-#
-#         # Store the time history of system states and other data.
-#         self.timeHistory = [np.concatenate([
-#             [self.time], self.systemState, self.vehicle.generalisedControlForces,
-#             self.vehicle.controlVector, self.vehicle.setPoint])]
-#
-#         # Create the initial RL state.
-#         self.state = self.dataToState(self.systemState)
-#
-#         return self.state
-#
-#     def step(self, action):
-#         # Set new time.
-#         self.iStep += 1
-#         self.time += self.dt
-#
-#         if self.fixedSp:
-#             # When a constant set point is given upon initialisation, just navigate
-#             # to it using the contorller built into the vehicle dynamics model.
-#             # This is mainly used for testing of the system dynamics and tuning
-#             # of the controller.
-#             pass
-#         else:
-#             # This is where the navigation algorithm has to provide a new set point
-#             # that will be passed to the vehicle.
-#             x_sp = action[0]*(2.*self.vehicle.Length) + self.systemState[0]
-#             y_sp = action[1]*(2.*self.vehicle.Length) + self.systemState[1]
-#             psi_d = action[2]*(45./180.*np.pi) + self.systemState[2]
-#             self.vehicle.setPoint = np.array([x_sp, y_sp, psi_d])
-#
-#         # Advance in time
-#         result_solve_ivp = scipy.integrate.solve_ivp(
-#             self.vehicle.derivs, (self.time-self.dt, self.time), self.systemState,
-#             method='RK45', t_eval=np.array([self.time]), max_step=self.dt, rtol=1e-3, atol=1e-3)
-#
-#         # Sort out the computed heading.
-#         result_solve_ivp.y[2, :] = result_solve_ivp.y[2, :] % (2.*np.pi)
-#
-#         # Store the dynamical system state.
-#         self.systemState = result_solve_ivp.y[:, -1]
-#
-#         # Extract RL state at the new time level.
-#         self.state = self.dataToState(self.systemState)
-#
-#         # Check if max episode length reached.
-#         done = False
-#         if self.iStep >= self._max_episode_steps:
-#             done = True
-#
-#         # TODO this could be the distance from the path, RMS deviation from the path
-#         # while it has been selected, some penalty for duration and excessive actuation.
-#         reward = 0.
-#
-#         # Store and tidy up the data when done.
-#         self.timeHistory.append(np.concatenate([
-#             [self.time], self.systemState, self.vehicle.generalisedControlForces,
-#             self.vehicle.controlVector, self.vehicle.setPoint]))
-#         if done:
-#             self.timeHistory = pandas.DataFrame(
-#                 data=np.array(self.timeHistory),
-#                 columns=["t"]+[f"x{i:d}" for i in range(len(self.systemState))]
-#                     +[f"F{i:d}" for i in range(len(self.vehicle.generalisedControlForces))]
-#                     +[f"u{i:d}" for i in range(len(self.vehicle.controlVector))]
-#                     +["x_d", "y_d", "psi_d"])
-#
-#         if done:
-#             self.steps_beyond_done += 1
-#         else:
-#             self.steps_beyond_done = 0
-#
-#         return self.state, reward, done, {}
 
 
 def lineOfSight(p0, p1, Rnav):
@@ -745,7 +561,7 @@ if __name__ == "__main__":
         resources.saveCoordSystem(filename, result_solve_ivp.y[:3, iTime], result_solve_ivp.y[3:6, iTime])
 
         if saveGeom:
-            Jtransform = coordinateTransform(result_solve_ivp.y[3, iTime], result_solve_ivp.y[4, iTime],
+            Jtransform = resources.coordinateTransform(result_solve_ivp.y[3, iTime], result_solve_ivp.y[4, iTime],
                 result_solve_ivp.y[5, iTime], dof=6)[:3, :3]
 
             with open("./tempData/geometry_{:06d}.stl".format(iTime), "w") as outfile:
