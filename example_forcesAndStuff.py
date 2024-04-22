@@ -50,27 +50,30 @@ def coordTransform6dof(angles):
 
 class RovTemp(object):
     def __init__(self):
-        # # # Main part - rotation matrix around the the global coordinate system axes.
-        # # self.vehicleAxes = np.eye(3)
-        # # Current roll, pitch, yaw
-        # self.rotation_angles = np.zeros(3)
-        # # Unit vectors along the vehicle x, y, z axes unpacked from the aggregate
-        # # array for ease of use.
-        # self.iHat, self.jHat, self.kHat = np.eye(3)#self.getCoordSystem()
-        # # Initialise coordinate transform matrix and its inverse.
-        # self.Jmatrix = coordTransform6dof(self.rotation_angles)
-        # self.invJmatrix = np.linalg.pinv(self.Jmatrix)
-
         # Set the coordinate transform matrix, its inverse, and vehicle axes unit vectors.
         self.updateMovingCoordSystem(np.zeros(3))
 
+        # Temp in this example.
+        self.pos = np.zeros(3)
+
+        # CG offset - used for exporting data only. NED.
+        self.xCG = np.array([0., 0., 0.0575])
+
         # Thruster geometry.
-        self.alphaThruster = 45./180.*np.pi # Angle between each horizontal thruster axes and centreline (0 fwd)
-        self.l_x = 0.156 # Moment arms [m] # +++
-        self.l_y = 0.111
-        self.l_z = 0.085
+        # Angle between each horizontal thruster axes and centreline (0 fwd)
+        # Wu (2018) says it's 45 degrees but this doesn't match the geometry.
+        self.alphaThruster = 33./180.*np.pi
+        # These are actually further inwards than Wu says.
+        # self.l_x = 0.156
+        # self.l_y = 0.111
+        self.l_x = 0.1475
+        self.l_y = 0.101
+        # 85 mm comes from Wu (2018) but doesn't match the real geometry
+        # self.l_z = 0.085
+        self.l_z = 0.068
         self.l_x_v = 0.120
-        self.l_y_v = 0.218
+        # self.l_y_v = 0.218
+        self.l_y_v = 0.22
         self.l_z_v = 0.0  # irrelevant
 
         # Thrister positions in the vehicle reference frame. Consistent with Wu (2018) fig 4.2
@@ -108,16 +111,11 @@ class RovTemp(object):
         self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
         self.Ainv = np.linalg.pinv(self.A)
 
-    # def getCoordSystem(self):
-    #     # iHat, jHat, kHat
-    #     return self.vehicleAxes.T
-
     def computeRollPitchYaw(self):
         # Compute the global roll, pitch, and yaw angles.
         # NOTE: These are not particularly safe and can be +/- pi away from the truth. Use with caution!
         roll = -np.arctan2(self.kHat[1], self.kHat[2])
         pitch = np.arctan2(self.kHat[0], self.kHat[2])
-        # pitch = -np.arctan2(-self.kHat[0], np.sqrt(self.kHat[1]**2 + self.kHat[2]**2))
         yaw = -np.arctan2(self.jHat[0], self.iHat[0])
         return np.array([roll, pitch, yaw])
 
@@ -126,13 +124,6 @@ class RovTemp(object):
         self.rotation_angles = rotation_angles
         # Create new vehicle axes from rotation angles (roll pitch yaw)
         self.iHat, self.jHat, self.kHat = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix().T
-        # Extract the new coordinate system vectors
-        # self.iHat, self.jHat, self.kHat = self.getCoordSystem()
-
-        # # Update vehicle axes.
-        # self.iHat = np.dot(self.Jmatrix[:3, :3], np.array([1., 0., 0.]))
-        # self.jHat = np.dot(self.Jmatrix[:3, :3], np.array([0., 1., 0.]))
-        # self.kHat = np.dot(self.Jmatrix[:3, :3], np.array([0., 0., 1.]))
 
     def applyMotionTransform(self, v_6, toWhatFrame):
         Jmatrix = coordTransform6dof(self.rotation_angles)
@@ -154,7 +145,57 @@ class RovTemp(object):
     def vehicleToGlobal(self, vecVehicle):
         return vecVehicle[0]*self.iHat + vecVehicle[1]*self.jHat + vecVehicle[2]*self.kHat
 
+    def saveCoordSystem(self, filename, L=0.25):
+
+        # Get vectors defining the body coordinate system.
+        p0 = self.pos + self.xCG
+        p1 = self.pos + self.xCG + L*self.iHat
+        p2 = self.pos + self.xCG + L*self.jHat
+        p3 = self.pos + self.xCG + L*self.kHat
+        bodyCoords, bodyCoordPts = np.vstack([self.iHat, self.jHat, self.kHat]), np.vstack([p0, p1, p2, p3])
+
+        # Mark thrusters.
+        thrusterPts = []
+        for i in range(self.thrusterPositions.shape[0]):
+            xt = self.vehicleToGlobal(self.thrusterPositions[i, :] + self.xCG)
+            tVec = rov.vehicleToGlobal(rov.A[:3, i]*L/2.)
+            thrusterPts.append(xt)
+            thrusterPts.append(xt+tVec)
+
+        with open(filename, "w") as outfile:
+            outfile.write("# vtk DataFile Version 3.0\n")
+            outfile.write("vtk output\n")
+            outfile.write("ASCII\n")
+            outfile.write("DATASET POLYDATA\n")
+            outfile.write("POINTS {:d} float\n".format(4 + len(thrusterPts)))
+            for j in range(4):
+                outfile.write("{:.5e} {:.5e} {:.5e}\n".format(
+                    bodyCoordPts[j, 0], bodyCoordPts[j, 1], bodyCoordPts[j, 2]))
+            for j in range(len(thrusterPts)):
+                outfile.write("{:.5e} {:.5e} {:.5e}\n".format(
+                    thrusterPts[j][0], thrusterPts[j][1], thrusterPts[j][2]))
+            outfile.write("LINES {:d} {:d}\n".format(3+len(thrusterPts)//2, 3*(3+len(thrusterPts)//2)))
+            outfile.write("2 0 1\n")
+            outfile.write("2 0 2\n")
+            outfile.write("2 0 3\n")
+            for j in range(len(thrusterPts)//2):
+                outfile.write("2 {:d} {:d}\n".format(4+j*2, 4+j*2+1))
+            outfile.write("CELL_DATA {:d}\n".format(3+len(thrusterPts)//2))
+            outfile.write("FIELD FieldData {:d}\n".format(1))
+            outfile.write("\n")
+            outfile.write("{} {:d} {:d} {}\n".format("iLine", 1, 3+len(thrusterPts)//2, "int"))
+            outfile.write("1\n")
+            outfile.write("2\n")
+            outfile.write("3\n")
+            for j in range(len(thrusterPts)//2):
+                outfile.write("0\n")
+            outfile.write("\n")
+
+        return bodyCoords
+
 rov = RovTemp()
+
+# rov.saveCoordSystem("D:/_temp/rovCoords.vtk")
 
 # Plot orientation.
 fig  = plt.figure(figsize=(8, 9))
@@ -208,14 +249,6 @@ sldr10 = Slider(sldr_ax10, 'Mg_x', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
 sldr11 = Slider(sldr_ax11, 'Mg_y', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
 sldr12 = Slider(sldr_ax12, 'Mg_z', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
 
-# sldr_ax7 = fig.add_axes([0.1, 0.21, 0.3, 0.025])
-# sldr_ax8 = fig.add_axes([0.1, 0.17, 0.3, 0.025])
-# sldr_ax9 = fig.add_axes([0.1, 0.13, 0.3, 0.025])
-# sldrLim = 0.5
-# sldr7 = Slider(sldr_ax7, 'Fv_x', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
-# sldr8 = Slider(sldr_ax8, 'Fv_y', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
-# sldr9 = Slider(sldr_ax9, 'Fv_z', -sldrLim, sldrLim, valinit=0., valfmt="%.2f")
-
 def onChanged(val):
     global rov, lns, texts, ax
 
@@ -229,27 +262,16 @@ def onChanged(val):
     # Resolve force in the vehicle axes.
     Fglobal = rov.globalToVehicle(Fg)
     Mglobal = rov.globalToVehicle(Mg)
-    # Mglobal = rov.angularTransform(Mg, angles, "toVehicle")
 
     # Combine generalised control forces and moments into one vector.
     generalisedControlForces = np.append(Fglobal, Mglobal)
     print("===")
     print(np.append(Fg, Mg))
     print(generalisedControlForces)
-    # # Resolve to the vehicle reference frame
-    # # TODO this doesn't work
-    # generalisedControlForces = rov.applyTransform(generalisedControlForces, "toVehicle")
-    # print(generalisedControlForces)
-    # # Extract the moment demands in the vehicle reference frame.
-    # Mglobal = generalisedControlForces[3:]
 
     # Translate into force demands for each thruster using the inverse of the thrust
     # allocation matrix.
     cv = np.matmul(rov.Ainv, generalisedControlForces)
-
-    # # Resolve force in vehicle coordinates to the global coordinates.
-    # Fv = np.array([sldr7.val, sldr8.val, sldr9.val])
-    # Fvehicle = rov.vehicleToGlobal(Fv)
 
     # Plot everything.
     for l in lns:
@@ -276,26 +298,11 @@ def onChanged(val):
     # Compute net actuation in the global reference frame.
     Fhglobal = rov.vehicleToGlobal(Fh)
     Mhglobal = rov.vehicleToGlobal(Mh)
-    # Hglobal = rov.applyTransform(H, "toGlobal")
-    # np.append(
-        # rov.vehicleToGlobal(H[:3]),
-        # rov.angularTransform(H[3:], angles, "toGlobal"))
-
-    # lns += ax.plot([0, Fvehicle[0]], [0, Fvehicle[1]], [0, Fvehicle[2]], "c--", lw=2)
-    # lns += ax.plot([Fvehicle[0]], [Fvehicle[1]], [Fvehicle[2]], "co", ms=6)
 
     texts.append(fig.text(0.5, 0.975,
         "roll, pitch, yaw = " +", ".join(['{:.1f} deg'.format(v) for v in rov.computeRollPitchYaw()/np.pi*180.]),
         va="center", ha="center"
     ))
-    # texts.append(fig.text(0.5, 0.94,
-    #     "Fg and Mg in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in np.append(Fglobal, Mglobal)]),
-    #     va="center", ha="center"
-    # ))
-    # texts.append(fig.text(0.5, 0.905,
-    #     "Fv in global reference frame = " +", ".join(['{:.2f}'.format(v) for v in Fvehicle]),
-    #     va="center", ha="center"
-    # ))
     texts.append(fig.text(0.5, 0.94,
         "Target forces and moments in vehicle reference frame = " +", ".join(['{:.2f}'.format(v) for v in generalisedControlForces]),
         va="center", ha="center"
@@ -311,8 +318,7 @@ def onChanged(val):
 
     return lns
 
-sliders = [sldr1, sldr2, sldr3, sldr4, sldr5, sldr6,# sldr7, sldr8, sldr9,
-    sldr10, sldr11, sldr12]
+sliders = [sldr1, sldr2, sldr3, sldr4, sldr5, sldr6, sldr10, sldr11, sldr12]
 for sldr in sliders:
     sldr.on_changed(onChanged)
 
