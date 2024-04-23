@@ -511,7 +511,7 @@ if __name__ == "__main__":
 
     # === Test the dynamics ===
 
-    saveGeom = False
+    # saveGeom = False
 
     # Constants and initial conditions
     dt = 0.25
@@ -547,10 +547,10 @@ if __name__ == "__main__":
     ax.legend()
 
     # Read the vehicle geometry.
-    with open("BlueROV2heavy_geom.obj", "r") as infile:
-        s = infile.read()
-    vertices = np.array([[float(v) for v in l.split()[1:]] for l in re.findall("v .*", s)])
-    faces = np.array([[int(v) for v in l.split()[1:]] for l in re.findall("f .*", s)])
+    # with open("BlueROV2heavy_geom.obj", "r") as infile:
+    #     s = infile.read()
+    # vertices = np.array([[float(v) for v in l.split()[1:]] for l in re.findall("v .*", s)])
+    # faces = np.array([[int(v) for v in l.split()[1:]] for l in re.findall("f .*", s)])
 
     # Save the target location and orientation.
     resources.saveCoordSystem("./tempData/target.vtk", rov.setPoint[:3], rov.setPoint[3:6], L=0.4)
@@ -560,30 +560,30 @@ if __name__ == "__main__":
         filename = "./tempData/result_{:06d}.vtk".format(iTime)
         resources.saveCoordSystem(filename, result_solve_ivp.y[:3, iTime], result_solve_ivp.y[3:6, iTime])
 
-        if saveGeom:
-            Jtransform = resources.coordinateTransform(result_solve_ivp.y[3, iTime], result_solve_ivp.y[4, iTime],
-                result_solve_ivp.y[5, iTime], dof=6)[:3, :3]
-
-            with open("./tempData/geometry_{:06d}.stl".format(iTime), "w") as outfile:
-                outfile.write("solid vehicle\n")
-                for iFace in range(len(faces)):
-                    # TODO speed up by using array-wide operations
-                    vs = vertices[faces[iFace]-1, :].copy()
-                    x1 = np.dot(Jtransform, vs[0, :])
-                    x2 = np.dot(Jtransform, vs[1, :])
-                    x3 = np.dot(Jtransform, vs[2, :])
-                    vs = np.vstack([x1, x2, x3]) + result_solve_ivp.y[:3, iTime]
-                    e0 = vs[0, :] - vs[1, :]
-                    e1 = vs[2, :] - vs[1, :]
-                    n = np.cross(e1, e0)
-                    n /= np.linalg.norm(n)
-                    outfile.write(" facet normal {:.6e} {:.6e} {:.6e}\n".format(n[0], n[1], n[2]))
-                    outfile.write("  outer loop\n")
-                    for j in range(3):
-                        outfile.write("   vertex {:.6e} {:.6e} {:.6e}\n".format(vs[j, 0], vs[j, 1], vs[j, 2]))
-                    outfile.write("  endloop\n")
-                    outfile.write("endfacet\n")
-                outfile.write("endsolid\n")
+        # if saveGeom:
+        #     Jtransform = resources.coordinateTransform(result_solve_ivp.y[3, iTime], result_solve_ivp.y[4, iTime],
+        #         result_solve_ivp.y[5, iTime], dof=6)[:3, :3]
+        #
+        #     with open("./tempData/geometry_{:06d}.stl".format(iTime), "w") as outfile:
+        #         outfile.write("solid vehicle\n")
+        #         for iFace in range(len(faces)):
+        #             # TODO speed up by using array-wide operations
+        #             vs = vertices[faces[iFace]-1, :].copy()
+        #             x1 = np.dot(Jtransform, vs[0, :])
+        #             x2 = np.dot(Jtransform, vs[1, :])
+        #             x3 = np.dot(Jtransform, vs[2, :])
+        #             vs = np.vstack([x1, x2, x3]) + result_solve_ivp.y[:3, iTime]
+        #             e0 = vs[0, :] - vs[1, :]
+        #             e1 = vs[2, :] - vs[1, :]
+        #             n = np.cross(e1, e0)
+        #             n /= np.linalg.norm(n)
+        #             outfile.write(" facet normal {:.6e} {:.6e} {:.6e}\n".format(n[0], n[1], n[2]))
+        #             outfile.write("  outer loop\n")
+        #             for j in range(3):
+        #                 outfile.write("   vertex {:.6e} {:.6e} {:.6e}\n".format(vs[j, 0], vs[j, 1], vs[j, 2]))
+        #             outfile.write("  endloop\n")
+        #             outfile.write("endfacet\n")
+        #         outfile.write("endsolid\n")
 
     # Save the trajectory.
     with open("./tempData/trajectory.obj", "w") as outfile:
