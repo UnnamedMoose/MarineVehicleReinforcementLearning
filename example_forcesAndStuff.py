@@ -43,6 +43,16 @@ class RovTemp(object):
         self.l_z_v = 0.0  # irrelevant
 
         # Thruster positions in the vehicle reference frame. Consistent with Wu (2018) fig 4.2
+        self.thrusterNames = [
+            "stbd_fwd_hor",
+            "port_fwd_hor",
+            "stbd_aft_hor",
+            "port_aft_hor",
+            "stbd_fwd_vert",
+            "port_fwd_vert",
+            "stbd_aft_vert",
+            "port_aft_vert",
+        ]
         self.thrusterPositions = np.array([
             [self.l_x, self.l_y, self.l_z],
             [self.l_x, -self.l_y, self.l_z],
@@ -76,12 +86,6 @@ class RovTemp(object):
         self.A[:, 6] = [0., 0., 1., self.l_y_v, self.l_x_v, 0.]
         self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
         self.Ainv = np.linalg.pinv(self.A)
-
-        # for i in range(6):
-        #     print(" ".join(["{:.6e}".format(v) for v in self.A[i,:]]))
-        # print("===")
-        # for i in range(8):
-        #     print(", ".join(["{:.6e}".format(v) for v in self.Ainv[i,:]]))
 
     def computeRollPitchYaw(self):
         # Compute the global roll, pitch, and yaw angles.
@@ -154,8 +158,74 @@ class RovTemp(object):
 
         return bodyCoords
 
+    def makeCfdInputs(self):
+        # Write the inverse of the thrust allocation matrix in Fortran.
+        usercode = ""
+        for i in range(len(self.thrusterNames)):
+            usercode += 'thrusterNames({:d}) = "th_{:s}"\n'.format(i+1, self.thrusterNames[i])
+        for i in range(len(self.thrusterNames)):
+            usercode += "Ainv({:d},:) = (/".format(i+1) + ", ".join(["{:.6e}".format(v) for v in self.Ainv[i, :]]) + "/)\n"
+
+        # Write ReFRESCO controls entries for all the thrusters
+        controls = ""
+        for i in range(len(self.thrusterNames)):
+            if "vert" in self.thrusterNames[i]:
+                v = [1., 0., 0.]
+            else:
+                v = [0., 0., 1.]
+            controls += "\n".join((
+            '<bodyForceModel name="th_{}">'.format(self.thrusterNames[i]),
+            '    <PROPELLER>',
+            '        <centreLocation>{:.6e} {:.6e} {:.6}</centreLocation>'.format(
+                self.thrusterPositions[i, 0], self.thrusterPositions[i, 1], self.thrusterPositions[i, 2]),
+            '        <propellerDiameter>0.077</propellerDiameter>',
+            '        <hubDiameter>0.041</hubDiameter>',
+            '        <axialVector>{:.6e} {:.6e} {:.6}</axialVector>'.format(
+                self.A[0, i], self.A[1, i], self.A[2, i]),
+            '        <upVector>{:.6e} {:.6e} {:.6}</upVector>'.format(v[0], v[1], v[2]),
+            '        <referenceSystem>',
+            '            <BODY_FIXED>',
+            '                <bodyName>rov</bodyName>',
+            '            </BODY_FIXED>',
+            '        </referenceSystem>',
+            '        <type>',
+            '            <ACTUATOR_DISC>',
+            '                <thickness>0.01</thickness>',
+            '                <distributionType>',
+            '                    <CUSTOM_PROPELLER>',
+            '                        <ForceComponentAxial>',
+            '                            <thrust>100.0</thrust>',
+            '                            <Model>',
+            '                                <ABMN>',
+            '                                    <a>0.15</a>',
+            '                                    <b>0.00</b>',
+            '                                    <m>2.15</m>',
+            '                                    <n>0.50</n>',
+            '                                </ABMN>',
+            '                            </Model>',
+            '                        </ForceComponentAxial>',
+            '                        <ForceComponentTangential>',
+            '                            <torque>0.1</torque>',
+            '                            <Model>',
+            '                                <PDRATIO>',
+            '                                    <value>1.0</value>',
+            '                                </PDRATIO>',
+            '                            </Model>',
+            '                        </ForceComponentTangential>',
+            '                    </CUSTOM_PROPELLER>',
+            '                </distributionType>',
+            '            </ACTUATOR_DISC>',
+            '        </type>',
+            '    </PROPELLER>',
+            '</bodyForceModel>',
+            '',
+            ))
+
+        return usercode, controls
+
 rov = RovTemp()
 
+usercode, controls = rov.makeCfdInputs()
 # rov.saveCoordSystem("D:/_temp/rovCoords.vtk")
 
 # Plot orientation.
