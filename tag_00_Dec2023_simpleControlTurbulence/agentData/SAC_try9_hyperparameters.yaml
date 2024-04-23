@@ -1,0 +1,49 @@
+agentName: SAC_try9
+agent_kwargs:
+  action_noise:
+    mu:
+    - 0.0
+    - 0.0
+    - 0.0
+    sigma:
+    - 0.05
+    - 0.05
+    - 0.05
+  batch_size: 256
+  buffer_size: 196608
+  ent_coef: auto_0.1
+  gamma: 0.95
+  gradient_steps: 1
+  learning_rate: 0.0005
+  learning_starts: 256
+  target_entropy: auto
+  train_freq:
+  - 1
+  - step
+  use_sde_at_warmup: false
+  verbose: 1
+env_kwargs:
+  currentTurbScale: 2.0
+  currentVelScale: 1.0
+  noiseMagActuation: 0.1
+  noiseMagCoeffs: 0.1
+nProc: 16
+nTrainingSteps: 1500000
+policy_kwargs:
+  activation_fn: <class 'torch.nn.modules.activation.GELU'>
+  net_arch:
+    pi:
+    - 128
+    - 128
+    - 128
+    qf:
+    - 128
+    - 128
+    - 128
+  use_sde: false
+trainingTime:
+- 3314.020191
+- 3125.679191
+- 2926.973152
+- 2840.737664
+- 2825.509448

@@ -1,66 +1,18 @@
-# Underwater Vehicle Reinforcement Learning
+# Marine Vehicle Reinforcement Learning
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7981976.svg)](https://doi.org/10.5281/zenodo.7981976)
 
 ## Overview
 
-Simple example of how to manoeuvre an underwater vehicle using reinforcement learning.
+Examples of how to use Reinforcement Learning (RL) in the context of marine vehicle control.
 
-The problem is posed by placing an underwater vehicle at a random position and
-heading inside the domain. It then needs to make its way to the origin and adopt
-a specific heading. There is a background turbulent flow along the x-axis with
-creating time-varying disturbances moving the vehicle away from the goal point.
+# Current version
 
-The manoeuvring model is deliberately simplified
-in order to keep the simulations fast. Specifically, added mass and inertia have
-been ignored, rigid body accelerations are not taken into account, and cross-coupling
-hydrodynamic coefficients are set to zero. Only three degrees of freedom (surge,
-sway, yaw) are considered and time integration is performed using the Euler method.
-All of this is done in order to make the solution procedure as fast as possible
-and allow rapid training of RL agents rather than prioritising accuracy of the
-physics model.
+much better!
 
-In addition to an RL agent, a simple proportional-derivative (PD)
-controller is used as a benchmark.
+# Past version 1 - simple AUV dynamics and control
 
-![Alt text](Figures/episodeAnim_RL_control.gif?raw=true "Example episode.")
-
-The environment can be run in parallel using the `SubprocVecEnv` structure provided
-by [Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3). The figure
-below shows the speedup seen on my machine with 8 physical cores.
-
-![Alt text](Figures/scalingTest.png?raw=true "Parallel environment speed-up vs no. cores.")
-
-## How to use
-
-The code is divided into three parts:
-
-- Numerical core:
-
-    * The core of the implementation resides in `verySimpleAuv.py`, this is where the environment is implemented.
-
-    * Turbulent flow is being generated using pre-computed spectral POD from [pySPOD](https://github.com/MathEXLab/PySPOD), which is implemented in `flowGenerator.py`. Data has been generated using [ReFRESCO](https://www.marin.nl/en/facilities-and-tools/software/refresco) CFD code building on the synthetic turbulence generation technique described in [Lidtke et al.](https://doi.org/10.3390/jmse9111274).
-
-    * Helper functions for plotting, training and evaluating RL agents are provided in `resources.py`.
-
-- Implementations of complete training and evaluation pipelines are given in
-scripts with names starting with `main_`. Specifically:
-
-    * `main_00_SAC_stable_baselines.py` - simplest possible soft-actor critic (SAC) approach using brute-force training.
-
-    * `main_01_SAC_sbl_customInit.py` - SAC supported by pretraining using the [imitation](https://github.com/HumanCompatibleAI/imitation) library. **UNDER CONSTRUCTION**
-
-- Loose scripts used for testing and visualising data
-
-    * `script_0_checkScaling.py` - used to check parallel scaling of the environment.
-
-    * `script_1_compareTraining.py` - used to compare training histories of different models trained independently.
-
-    * `script_2_testImitation.py` - minimum working example for the imitation library.
-
-## How to cite?
-
-This code can be cited with
+`tag_00_Dec2023_simpleControlTurbulence` - this contains an image of the repository before first major refactoring. This version of the code may be used to reproduce the results presented in [this conference paper](https://www.researchgate.net/profile/Artur-Lidtke/publication/369321603_Combining_deep_reinforcement_learning_and_computational_fluid_dynamics_for_efficient_navigation_in_turbulent_flows/links/64a2695e8de7ed28ba6fe59c/Combining-deep-reinforcement-learning-and-computational-fluid-dynamics-for-efficient-navigation-in-turbulent-flows.pdf). This is no longer maintained but should still work and provide a useful reference. This version of the code can be cited with:
 
 ```
 @software{Lidtke_2023_7981976,
