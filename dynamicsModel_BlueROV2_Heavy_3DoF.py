@@ -20,7 +20,7 @@ font = {"family": "serif",
 matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
-from resources import headingError
+from resources import angleError
 
 class BlueROV2Heavy3DoF:
     def __init__(self, setPoint):
@@ -144,7 +144,7 @@ class BlueROV2Heavy3DoF:
         K_I = np.array([0.1, 0.1, 0.1])
         K_D = np.array([5., 5., 0.5])
         e = np.append(self.setPoint[:2] - np.array([x, y]),
-                      headingError(self.setPoint[2], psi))
+                      angleError(self.setPoint[2], psi))
         if self.eOld is None:
             self.eOld = e.copy()
         dedt = (e - self.eOld) / max(1e-9, t - self.tOld)
@@ -405,7 +405,7 @@ class BlueROV2Heavy3DoFEnv(gym.Env):
             (self.path[self.iWp+1, 0]-systemState[0]) / (self.vehicle.Length*3.),
             (self.path[self.iWp+1, 1]-systemState[1]) / (self.vehicle.Length*3.),
             # Heading error
-            headingError(self.vehicle.setPoint[2], systemState[2]) / (45./180.*np.pi)
+            angleError(self.vehicle.setPoint[2], systemState[2]) / (45./180.*np.pi)
         ], -1., 1.)
 
     def reset(self, initialSetpoint=None):

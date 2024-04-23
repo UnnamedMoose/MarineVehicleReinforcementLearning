@@ -216,9 +216,9 @@ class BlueROV2Heavy6DoF:
         K_I = np.array([0.1, 0.1, 0.1, 0.01, 0.01, 0.01])
         K_D = np.array([5., 5., 5., 0.1, 0.1, 0.1])
         e = np.append(self.setPoint[:3] - np.array([x, y, z]),
-                      [resources.headingError(self.setPoint[3], phi),
-                      resources.headingError(self.setPoint[4], theta),
-                      resources.headingError(self.setPoint[5], psi)])
+                      [resources.angleError(self.setPoint[3], phi),
+                      resources.angleError(self.setPoint[4], theta),
+                      resources.angleError(self.setPoint[5], psi)])
         if self.eOld is None:
             self.eOld = e.copy()
         dedt = (e - self.eOld) / max(1e-9, t - self.tOld)
@@ -229,6 +229,7 @@ class BlueROV2Heavy6DoF:
             controlValues[i] = max(-m, min(m, controlValues[i]))
         self.eOld = e
         self.tOld = t
+        # controlValues = np.zeros(6)
 
         # Resolve into the vehicle reference frame before force allocation.
         self.generalisedControlForces = np.append(
@@ -435,9 +436,9 @@ class BlueROV2Heavy6DoFEnv(gym.Env):
             (self.path[self.iWp+1, 1]-systemState[1]) / (self.vehicle.Length*3.),
             (self.path[self.iWp+1, 2]-systemState[2]) / (self.vehicle.Length*3.),
             # Angle errors
-            resources.headingError(self.vehicle.setPoint[3], systemState[3]) / (45./180.*np.pi),
-            resources.headingError(self.vehicle.setPoint[4], systemState[4]) / (45./180.*np.pi),
-            resources.headingError(self.vehicle.setPoint[5], systemState[5]) / (45./180.*np.pi),
+            resources.angleError(self.vehicle.setPoint[3], systemState[3]) / (45./180.*np.pi),
+            resources.angleError(self.vehicle.setPoint[4], systemState[4]) / (45./180.*np.pi),
+            resources.angleError(self.vehicle.setPoint[5], systemState[5]) / (45./180.*np.pi),
         ], -1., 1.)
 
     def reset(self, initialSetpoint=None):
@@ -603,10 +604,10 @@ if __name__ == "__main__":
 
     # === Test the dynamics ===
 
-    # Constants and initial conditions
+    # # Constants and initial conditions
     # dt = 0.25
     # state0 = np.array([
-    #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 0./180.*np.pi,
+    #     0., 0., 0., 30./180.*np.pi, -40./180.*np.pi, 150./180.*np.pi,
     #     0., 0., 0., 0., 0., 0.])
     # tMax = 15.
     # t = np.arange(0.0, tMax, dt)
@@ -639,7 +640,11 @@ if __name__ == "__main__":
     # # Plot the coordinate systems throughout the episode.
     # for i in range(0, result_solve_ivp.y.shape[1], 10):
     #     rov.updateMovingCoordSystem(result_solve_ivp.y[3:6, i])
-    #     resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=result_solve_ivp.y[:3, i], ls="--")
+    #     if i == 0:
+    #         ls = "-"
+    #     else:
+    #         ls = "--"
+    #     resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=result_solve_ivp.y[:3, i], ls=ls)
     # ax[0].set_aspect("equal")
     # ax[0].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
     #
@@ -652,14 +657,6 @@ if __name__ == "__main__":
     # ax[1].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
     # plt.show()
     #
-    # # Save the target location and orientation.
-    # resources.saveCoordSystem("./tempData/target.vtk", rov.setPoint[:3], rov.setPoint[3:6], L=0.4)
-    #
-    # # Save moving coordinate system and geometry.
-    # for iTime in range(result_solve_ivp.t.shape[0]):
-    #     filename = "./tempData/result_{:06d}.vtk".format(iTime)
-    #     resources.saveCoordSystem(filename, result_solve_ivp.y[:3, iTime], result_solve_ivp.y[3:6, iTime])
-    #
     # # Save the trajectory.
     # with open("./tempData/trajectory.obj", "w") as outfile:
     #     for iTime in range(result_solve_ivp.t.shape[0]):
@@ -667,7 +664,6 @@ if __name__ == "__main__":
     #             result_solve_ivp.y[1, iTime], result_solve_ivp.y[2, iTime]))
     #     for iTime in range(result_solve_ivp.t.shape[0]-1):
     #         outfile.write("l {:d} {:d}\n".format(iTime+1, iTime+2))
-
 
     # === Test the environment with a constant set point ===
 
