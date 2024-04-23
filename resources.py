@@ -22,6 +22,14 @@ import yaml
 # orientation = "north_east_clockwise"
 orientation = "right_up_anticlockwise"
 
+def plotCoordSystem(ax, iHat, jHat, kHat, x0=np.zeros(3), ds=0.45, ls="-"):
+    x1 = x0 + iHat*ds
+    x2 = x0 + jHat*ds
+    x3 = x0 + kHat*ds
+    lns = ax.plot([x0[0], x1[0]], [x0[1], x1[1]], [x0[2], x1[2]], "r", ls=ls, lw=2)
+    lns += ax.plot([x0[0], x2[0]], [x0[1], x2[1]], [x0[2], x2[2]], "g", ls=ls, lw=2)
+    lns += ax.plot([x0[0], x3[0]], [x0[1], x3[1]], [x0[2], x3[2]], "b", ls=ls, lw=2)
+    return lns
 
 def saveCoordSystem(filename, pos, orientation, L=0.25):
     Jtransform = coordinateTransform(orientation[0], orientation[1], orientation[2], dof=6)

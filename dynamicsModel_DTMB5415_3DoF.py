@@ -529,3 +529,5 @@ if __name__ == "__main__":
     ax.set_ylabel("Rudder angle [deg]")
     ax.set_xlim((0, env.timeHistory["t"].max()))
     ax.plot(env.timeHistory["t"], env.timeHistory["u1"]/np.pi*180, c="r", lw=2)
+
+    plt.show()

@@ -14,40 +14,6 @@ from matplotlib.widgets import Slider
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-def coordTransform6dof(angles):
-    phi, theta, psi = angles
-
-    cosThetaDenom = np.cos(theta)
-    if np.abs(cosThetaDenom) < 1e-12:
-        cosThetaDenom = 1e-6
-    elif np.abs(cosThetaDenom) < 1e-6:
-        cosThetaDenom = 1e-6 * np.sign(cosThetaDenom)
-
-    J1 = np.array([
-        [np.cos(psi)*np.cos(theta), -np.sin(psi)*np.cos(phi) + np.cos(psi)*np.sin(theta)*np.sin(phi),
-            np.sin(psi)*np.sin(phi) + np.cos(psi)*np.sin(theta)*np.sin(phi)],
-        [np.sin(psi)*np.cos(theta), np.cos(psi)*np.cos(phi) + np.sin(psi)*np.sin(theta)*np.sin(phi),
-            -np.cos(psi)*np.sin(phi) + np.sin(psi)*np.sin(theta)*np.cos(phi)],
-        [-np.sin(theta), np.cos(theta)*np.sin(phi), np.cos(theta)*np.cos(phi)],
-    ])
-
-    J2 = np.array([
-        [1., np.sin(phi)*np.sin(theta)/cosThetaDenom, np.cos(phi)*np.sin(theta)/cosThetaDenom],
-        [0., np.cos(phi), -np.sin(phi)],
-        [0., np.sin(phi)/cosThetaDenom, np.cos(phi)/cosThetaDenom],
-    ])
-
-    coordTransform = np.array([
-        [J1[0,0], J1[0,1], J1[0,2], 0., 0., 0.],
-        [J1[1,0], J1[1,1], J1[1,2], 0., 0., 0.],
-        [J1[2,0], J1[2,1], J1[2,2], 0., 0., 0.],
-        [0., 0., 0., J2[0,0], J2[0,1], J2[0,2]],
-        [0., 0., 0., J2[1,0], J2[1,1], J2[1,2]],
-        [0., 0., 0., J2[2,0], J2[2,1], J2[2,2]],
-    ])
-
-    return coordTransform
-
 class RovTemp(object):
     def __init__(self):
         # Set the coordinate transform matrix, its inverse, and vehicle axes unit vectors.
@@ -111,6 +77,12 @@ class RovTemp(object):
         self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
         self.Ainv = np.linalg.pinv(self.A)
 
+        # for i in range(6):
+        #     print(" ".join(["{:.6e}".format(v) for v in self.A[i,:]]))
+        # print("===")
+        # for i in range(8):
+        #     print(", ".join(["{:.6e}".format(v) for v in self.Ainv[i,:]]))
+
     def computeRollPitchYaw(self):
         # Compute the global roll, pitch, and yaw angles.
         # NOTE: These are not particularly safe and can be +/- pi away from the truth. Use with caution!
@@ -124,17 +96,6 @@ class RovTemp(object):
         self.rotation_angles = rotation_angles
         # Create new vehicle axes from rotation angles (roll pitch yaw)
         self.iHat, self.jHat, self.kHat = Rotation.from_euler('XYZ', rotation_angles, degrees=False).as_matrix().T
-
-    def applyMotionTransform(self, v_6, toWhatFrame):
-        Jmatrix = coordTransform6dof(self.rotation_angles)
-
-        if toWhatFrame == "toVehicle":
-            invJmatrix = np.linalg.pinv(Jmatrix)
-            return np.matmul(invJmatrix, v_6)
-        elif toWhatFrame == "toGlobal":
-            return np.dot(Jmatrix, v_6)
-        else:
-            raise ValueError("what?")
 
     def globalToVehicle(self, vecGlobal):
         return np.array([

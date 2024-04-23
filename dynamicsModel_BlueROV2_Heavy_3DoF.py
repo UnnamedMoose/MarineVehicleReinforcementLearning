@@ -610,7 +610,7 @@ class LOSNavigation(object):
 def plotEpisodeDetail(env, title=""):
     # Plot trajectory
     fig, ax  = plt.subplots(1, 3, figsize=(14, 6))
-    plt.subplots_adjust(top=0.96, bottom=0.139, left=0.069, right=0.973, hspace=0.2, wspace=0.445)
+    plt.subplots_adjust(top=0.89, bottom=0.139, left=0.069, right=0.973, hspace=0.2, wspace=0.445)
     fig.canvas.manager.set_window_title(title)
     ax[0].set_xlabel("y [m, +ve east]")
     ax[0].set_ylabel("x [m, +ve north]")
