@@ -63,29 +63,61 @@ class RovTemp(object):
             [-self.l_x_v, self.l_y_v, self.l_z_v],
             [-self.l_x_v, -self.l_y_v, self.l_z_v],
         ])
+        self.thrusterNormals = np.array([
+            [np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.],
+            [np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.],
+            [-np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.],
+            [-np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.],
+            [0., 0., -1.],
+            [0., 0., 1.],
+            [0., 0., 1.],
+            [0., 0., -1.],
+        ])
 
         # Use pseudo-inverse of the control allocation matrix in order to go from
         # desired generalised forces to actuator demands in rpm.
         # NOTE the original 3 DoF notation is inconsistent with page 48 in Wu (2018),
         # what follows is (or should be) the same. See Figure 4.2 and Eq. 4.62 in their work.
-        self.A = np.zeros((6, 8))
-        self.A[:, 0] = [np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
-            np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
-            -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
-        self.A[:, 1] = [np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
-            -np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
-            np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
-        self.A[:, 2] = [-np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
-            np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
-            np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
-        self.A[:, 3] = [-np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
-            -np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
-            -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
-        self.A[:, 4] = [0., 0., -1., -self.l_y_v, self.l_x_v, 0.]
-        self.A[:, 5] = [0., 0., 1., -self.l_y_v, -self.l_x_v, 0.]
-        self.A[:, 6] = [0., 0., 1., self.l_y_v, self.l_x_v, 0.]
-        self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
-        self.Ainv = np.linalg.pinv(self.A)
+        # NOTE: this is manual way of computing this for the special case of Wu. The
+        # new routine takes care of this in a generalised way. I left this here to
+        # allow sanity checks in the future, if necessary.
+        # self.A = np.zeros((6, 8))
+        # self.A[:, 0] = [np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
+        #     np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
+        #     -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
+        # self.A[:, 1] = [np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
+        #     -np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
+        #     np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
+        # self.A[:, 2] = [-np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
+        #     np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
+        #     np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
+        # self.A[:, 3] = [-np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
+        #     -np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
+        #     -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
+        # self.A[:, 4] = [0., 0., -1., -self.l_y_v, self.l_x_v, 0.]
+        # self.A[:, 5] = [0., 0., 1., -self.l_y_v, -self.l_x_v, 0.]
+        # self.A[:, 6] = [0., 0., 1., self.l_y_v, self.l_x_v, 0.]
+        # self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
+        # self.Ainv = np.linalg.pinv(self.A)
+        self.A, self.Ainv = self.computeThrustAllocation()
+
+    def computeThrustAllocation(self, x0=None):
+        if x0 is None:
+            x0 = np.zeros(3)
+
+        # Use pseudo-inverse of the control allocation matrix in order to go from
+        # desired generalised forces to actuator demands in rpm.
+        # NOTE the original 3 DoF notation is inconsistent with page 48 in Wu (2018),
+        # what follows is (or should be) the same. See Figure 4.2 and Eq. 4.62 in their work.
+        A = np.zeros((6, self.thrusterPositions.shape[0]))
+        for i in range(self.thrusterPositions.shape[0]):
+            A[:, i] = np.append(
+                self.thrusterNormals[i, :],
+                np.cross(self.thrusterPositions[i, :]-x0, self.thrusterNormals[i, :])
+            )
+        Ainv = np.linalg.pinv(A)
+
+        return A, Ainv
 
     def computeRollPitchYaw(self):
         # Compute the global roll, pitch, and yaw angles.
@@ -159,12 +191,28 @@ class RovTemp(object):
         return bodyCoords
 
     def makeCfdInputs(self):
+        # Mass, displacement and inertia matrices.
+        # Simplified.
+        vol = 0.00431693738
+        m = vol*1000
+        x_cb = np.array([0.013943957, 0, 0.065015371])
+        I = np.array([3.45979819e-05, 5.19465479e-05, 7.68650067e-05])*1000.
+
+        # Full
+        # vol = 0.00814973
+        # m = vol*1000
+        # x_cb = np.array([0.0104145, 0, 0.0959112])
+        # I = np.array([0.000130705, 0.0001286, 0.000196422])*1000.
+
+        # Redo with the right origin.
+        A, Ainv = self.computeThrustAllocation(x0=x_cb-self.xCG)
+
         # Write the inverse of the thrust allocation matrix in Fortran.
         usercode = ""
         for i in range(len(self.thrusterNames)):
             usercode += 'thrusterNames({:d}) = "th_{:s}"\n'.format(i+1, self.thrusterNames[i])
         for i in range(len(self.thrusterNames)):
-            usercode += "Ainv({:d},:) = (/".format(i+1) + ", ".join(["{:.6e}".format(v) for v in self.Ainv[i, :]]) + "/)\n"
+            usercode += "Ainv({:d},:) = (/".format(i+1) + ", ".join(["{:.6e}".format(v) for v in Ainv[i, :]]) + "/)\n"
 
         # Write ReFRESCO controls entries for all the thrusters
         controls = ""
@@ -177,7 +225,7 @@ class RovTemp(object):
             '<bodyForceModel name="th_{}">'.format(self.thrusterNames[i]),
             '    <PROPELLER>',
             '        <centreLocation>{:.6e} {:.6e} {:.6}</centreLocation>'.format(
-                self.thrusterPositions[i, 0], self.thrusterPositions[i, 1], self.thrusterPositions[i, 2]),
+                self.thrusterPositions[i, 0]+self.xCG[0], self.thrusterPositions[i, 1]+self.xCG[1], self.thrusterPositions[i, 2]+self.xCG[2]),
             '        <propellerDiameter>0.077</propellerDiameter>',
             '        <hubDiameter>0.041</hubDiameter>',
             '        <axialVector>{:.6e} {:.6e} {:.6}</axialVector>'.format(
@@ -226,7 +274,12 @@ class RovTemp(object):
 rov = RovTemp()
 
 usercode, controls = rov.makeCfdInputs()
-# rov.saveCoordSystem("D:/_temp/rovCoords.vtk")
+
+with open("tempData/usercode.F90", "w") as outf:
+    outf.write(usercode)
+with open("tempData/controls.xml", "w") as outf:
+    outf.write(controls)
+rov.saveCoordSystem("tempData/rovCoords.vtk")
 
 # Plot orientation.
 fig  = plt.figure(figsize=(8, 9))
@@ -296,9 +349,6 @@ def onChanged(val):
 
     # Combine generalised control forces and moments into one vector.
     generalisedControlForces = np.append(Fglobal, Mglobal)
-    print("===")
-    print(np.append(Fg, Mg))
-    print(generalisedControlForces)
 
     # Translate into force demands for each thruster using the inverse of the thrust
     # allocation matrix.
