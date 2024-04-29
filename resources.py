@@ -16,6 +16,24 @@ import shutil
 import pandas
 import yaml
 
+def computeThrustAllocation(thrusterPositions, thrusterNormals, x0=None):
+    if x0 is None:
+        x0 = np.zeros(3)
+
+    # Use pseudo-inverse of the control allocation matrix in order to go from
+    # desired generalised forces to actuator demands in rpm.
+    # NOTE the original 3 DoF notation is inconsistent with page 48 in Wu (2018),
+    # what follows is (or should be) the same. See Figure 4.2 and Eq. 4.62 in their work.
+    A = np.zeros((6, thrusterPositions.shape[0]))
+    for i in range(thrusterPositions.shape[0]):
+        A[:, i] = np.append(
+            thrusterNormals[i, :],
+            np.cross(thrusterPositions[i, :]-x0, thrusterNormals[i, :])
+        )
+    Ainv = np.linalg.pinv(A)
+
+    return A, Ainv
+
 def plotCoordSystem(ax, iHat, jHat, kHat, x0=np.zeros(3), ds=0.45, ls="-"):
     x1 = x0 + iHat*ds
     x2 = x0 + jHat*ds

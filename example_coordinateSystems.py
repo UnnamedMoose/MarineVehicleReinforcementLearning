@@ -99,25 +99,7 @@ class RovTemp(object):
         # self.A[:, 6] = [0., 0., 1., self.l_y_v, self.l_x_v, 0.]
         # self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
         # self.Ainv = np.linalg.pinv(self.A)
-        self.A, self.Ainv = self.computeThrustAllocation()
-
-    def computeThrustAllocation(self, x0=None):
-        if x0 is None:
-            x0 = np.zeros(3)
-
-        # Use pseudo-inverse of the control allocation matrix in order to go from
-        # desired generalised forces to actuator demands in rpm.
-        # NOTE the original 3 DoF notation is inconsistent with page 48 in Wu (2018),
-        # what follows is (or should be) the same. See Figure 4.2 and Eq. 4.62 in their work.
-        A = np.zeros((6, self.thrusterPositions.shape[0]))
-        for i in range(self.thrusterPositions.shape[0]):
-            A[:, i] = np.append(
-                self.thrusterNormals[i, :],
-                np.cross(self.thrusterPositions[i, :]-x0, self.thrusterNormals[i, :])
-            )
-        Ainv = np.linalg.pinv(A)
-
-        return A, Ainv
+        self.A, self.Ainv = resources.computeThrustAllocation(self.thrusterPositions, self.thrusterNormals)
 
     def computeRollPitchYaw(self):
         # Compute the global roll, pitch, and yaw angles.
@@ -205,7 +187,7 @@ class RovTemp(object):
         # I = np.array([0.000130705, 0.0001286, 0.000196422])*1000.
 
         # Redo with the right origin.
-        A, Ainv = self.computeThrustAllocation(x0=x_cb-self.xCG)
+        A, Ainv = resources.computeThrustAllocation(self.thrusterPositions, self.thrusterNormals, x0=x_cb-self.xCG)
 
         # Write the inverse of the thrust allocation matrix in Fortran.
         usercode = ""
