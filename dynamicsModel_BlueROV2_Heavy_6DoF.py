@@ -62,7 +62,7 @@ class BlueROV2Heavy6DoF:
 
         # ---
         # Added mass and intertia
-        self.Xudot =  -5.5 # kg # +++
+        self.Xudot = -5.5 # kg # +++
         self.Yvdot = -12.7 # +++
 
         # TODO check values in reference
@@ -73,28 +73,28 @@ class BlueROV2Heavy6DoF:
 
         self.Nrdot = -0.12 # kg m^2 / rad # +++
         # Cross-coupling terms.
-        self.Yrdot =   0.
-        self.Nvdot =   0.
+        self.Yrdot = 0.
+        self.Nvdot = 0.
 
         # ---
         # Quadratic terms.
         self.Xuu = -18.18 # kg/m # +++
         self.Yvv = -21.66 # +++
-        self.Yrr =   0.
-        self.Ypp =   0.
+        self.Yrr = 0.
+        self.Ypp = 0.
 
         # TODO check values in reference
         self.Zww = -21.0
-        self.Zqq =    0.
-        self.Kvv =    0.
-        self.Kpp =    0.
-        self.Krr =    0.
-        self.Mww =  -1.55
-        self.Mqq =  -1.55 # kg m^2 / rad^2
+        self.Zqq = 0.
+        self.Kvv = 0.
+        self.Kpp = 0.
+        self.Krr = 0.
+        self.Mww = -1.55
+        self.Mqq = -1.55 # kg m^2 / rad^2
 
-        self.Nvv =   0.0 # kg
-        self.Nrr =  -1.55 # kg m^2 / rad^2 # +++ # TODO maybe wrong units?
-        self.Npp =    0.
+        self.Nvv = 0.0 # kg
+        self.Nrr = -1.55 # kg m^2 / rad^2 # +++ # TODO maybe wrong units?
+        self.Npp = 0.
 
         # ---
         # Linear damping terms - same as Kantapon but divided by velocity and density
@@ -172,24 +172,6 @@ class BlueROV2Heavy6DoF:
         # desired generalised forces to actuator demands in rpm.
         # NOTE the original 3 DoF notation is inconsistent with page 48 in Wu (2018),
         # what follows is (or should be) the same. See Figure 4.2 and Eq. 4.62 in their work.
-        # self.A = np.zeros((6, 8))
-        # self.A[:, 0] = [np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
-        #     np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
-        #     -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
-        # self.A[:, 1] = [np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
-        #     -np.sin(self.alphaThruster)*self.l_z, np.cos(self.alphaThruster)*self.l_z,
-        #     np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
-        # self.A[:, 2] = [-np.cos(self.alphaThruster), -np.sin(self.alphaThruster), 0.,
-        #     np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
-        #     np.sin(self.alphaThruster)*self.l_x + np.cos(self.alphaThruster)*self.l_y]
-        # self.A[:, 3] = [-np.cos(self.alphaThruster), np.sin(self.alphaThruster), 0.,
-        #     -np.sin(self.alphaThruster)*self.l_z, -np.cos(self.alphaThruster)*self.l_z,
-        #     -np.sin(self.alphaThruster)*self.l_x - np.cos(self.alphaThruster)*self.l_y]
-        # self.A[:, 4] = [0., 0., -1., -self.l_y_v, self.l_x_v, 0.]
-        # self.A[:, 5] = [0., 0., 1., -self.l_y_v, -self.l_x_v, 0.]
-        # self.A[:, 6] = [0., 0., 1., self.l_y_v, self.l_x_v, 0.]
-        # self.A[:, 7] = [0., 0., -1., self.l_y_v, -self.l_x_v, 0.]
-        # self.Ainv = np.linalg.pinv(self.A)
         self.A, self.Ainv = resources.computeThrustAllocation(self.thrusterPositions, self.thrusterNormals)
 
     def thrusterModel(self, rpm):
@@ -241,9 +223,6 @@ class BlueROV2Heavy6DoF:
         # Relative fluid velocity. For added mass, assume rate of change of fluid
         # velocity is much smaller than that of the vehicle, hence d/dt(v-vc) = dv/dt.
         velRel = vel - velCurrent
-        # uRel = vel[0] - velCurrent[0]
-        # vRel = vel[1] - velCurrent[1]
-        # wRel = vel[2] - velCurrent[2]
 
         # ===
         # Total Mass Matrix (or inertia matrix), including added mass terms.
@@ -402,161 +381,17 @@ class BlueROV2Heavy6DoF:
 
         # Call the force model for the current state.
         M, RHS = self.forceModel(pos, vel, angles, cv)
-        # # Apply saturation and deadband to model the discrepancy between required
-        # # and possible thruster output.
-        # def limit(x):
-        #     r = max(-3500., min(3500., x))
-        #     if np.abs(r) < 300:
-        #         r = 0.
-        #     return r
-        # for i in range(8):
-        #     cv[i] = limit(cv[i])
-        #
-        # # Hydrodynamic forces excluding added mass terms.
-        # H = np.zeros(6)
-        # for i in range(8):
-        #     # Thruster model.
-        #     H += self.thrusterModel(cv[i])*self.A[:, i]
-        #
-        # # TODO add a current model
-        # velCurrent = np.zeros(6)
-        #
-        # # Resolve the current into the vehicle reference frame.
-        # if np.linalg.norm(velCurrent) > 0.:
-        #     velCurrent = self.globalToVehicle(velCurrent)
-        #
-        # # Relative fluid velocity. For added mass, assume rate of change of fluid
-        # # velocity is much smaller than that of the vehicle, hence d/dt(v-vc) = dv/dt.
-        # velRel = vel - velCurrent
-        # uRel = vel[0] - velCurrent[0]
-        # vRel = vel[1] - velCurrent[1]
-        # wRel = vel[2] - velCurrent[2]
-        #
-        # # ===
-        # # Total Mass Matrix (or inertia matrix), including added mass terms.
-        # Mrb = np.array([
-        #     [self.m,                0.,                    0.,                    0.,                   self.m*self.CG[2],    -self.m*self.CG[1]],
-        #     [0.,                    self.m,                0.,                    -self.m*self.CG[2],   0.,                    self.m*self.CG[0]],
-        #     [0.,                    0.,                    self.m,                self.m*self.CG[1],    -self.m*self.CG[0],    0.],
-        #     [0.,                    -self.m*self.CG[2],    self.m*self.CG[1],     0., 0., 0.],
-        #     [self.m*self.CG[2],     0.,                    -self.m*self.CG[0],    0., 0., 0.],
-        #     [-self.m*self.CG[1],    self.m*self.CG[0],     0.,                    0., 0., 0.],
-        # ])
-        # Mrb[3:,3:] = self.I
-        #
-        # Ma = -1. * np.diag([self.Xudot, self.Yvdot, self.Zvdot, self.Kpdot, self.Mqdot, self.Nrdot])
-        #
-        # M = Mrb + Ma
-        #
-        # # ===
-        # # Rigid-body accelerations.
-        # Crb = np.array([
-        #     [0., 0., 0.,  self.m*(self.CG[1]*q + self.CG[2]*r),
-        #                 -self.m*(self.CG[0]*q - w),
-        #                 -self.m*(self.CG[0]*r + v)],
-        #     [0., 0., 0., -self.m*(self.CG[1]*p + w),
-        #                  self.m*(self.CG[2]*r + self.CG[0]*p),
-        #                 -self.m*(self.CG[1]*r - u)],
-        #     [0., 0., 0., -self.m*(self.CG[2]*p - v),
-        #                 -self.m*(self.CG[2]*q + u),
-        #                  self.m*(self.CG[0]*p + self.CG[1]*q)],
-        #     [    -self.m*(self.CG[1]*q + self.CG[2]*r),
-        #          self.m*(self.CG[1]*p + w),
-        #          self.m*(self.CG[2]*p - v),
-        #         0.,
-        #         -self.I[1,2]*q - self.I[0,2]*p + self.I[2,2]*r,
-        #          self.I[1,2]*r + self.I[0,1]*p - self.I[1,1]*q],
-        #     [     self.m*(self.CG[0]*q - w),
-        #         -self.m*(self.CG[2]*r + self.CG[0]*p),
-        #          self.m*(self.CG[2]*q + u),
-        #          self.I[1,2]*q + self.I[0,2]*p - self.I[2,2]*r,
-        #         0.,
-        #         -self.I[0,2]*r - self.I[0,1]*q + self.I[0,0]*p],
-        #     [     self.m*(self.CG[0]*r + v),
-        #          self.m*(self.CG[1]*r - u),
-        #         -self.m*(self.CG[0]*p + self.CG[1]*q),
-        #         -self.I[1,2]*r - self.I[0,1]*p + self.I[1,1]*q,
-        #          self.I[0,2]*r + self.I[0,1]*q - self.I[0,0]*q,
-        #         0.],
-        # ])
-        #
-        # Ca = np.array([
-        #     [0.,            0.,                0.,                0.,                -self.Zwdot*w,    self.Yvdot*v],
-        #     [0.,            0.,                0.,                self.Zwdot*w,    0.,                -self.Xudot*u],
-        #     [0.,            0.,                0.,                -self.Yvdot*v,    self.Xudot*u,    0.],
-        #     [0.,            -self.Zwdot*w,    self.Yvdot*v,    0.,                -self.Nrdot*r,    self.Mqdot*q],
-        #     [ self.Zwdot*w,    0.,                -self.Xudot*u,    self.Nrdot*r,    0.,                -self.Kpdot*p],
-        #     [-self.Yvdot*v,     self.Xudot*u,    0.,                -self.Mqdot*q,    self.Kpdot*p,    0.],
-        # ])
-        #
-        # # ===
-        # # Fluid damping.
-        # Dl = -1. * np.array([
-        #     [self.Xu,    0.,            0.,            0.,            0.,            0.],
-        #     [0.,        self.Yv,    0.,            self.Yp,    0.,            self.Yr],
-        #     [0.,        0.,            self.Zw,    0.,            self.Zq,    0.],
-        #     [0.,        self.Kv,    0.,            self.Kp,    0.,            self.Kr],
-        #     [0.,        0.,            self.Mw,    0.,            self.Mq,    0.],
-        #     [0.,        self.Nv,    0.,            self.Np,    0.,            self.Nr],
-        # ])
-        #
-        # Dq = -1. * np.array([
-        #     [self.Xuu,      0.,          0.,            0.,          0.,          0.],
-        #     [0.,            self.Yvv,    0.,            self.Ypp,    0.,          self.Yrr],
-        #     [0.,            0.,          self.Zww,      0.,          self.Zqq,    0.],
-        #     [0.,            self.Kvv,    0.,            self.Kpp,    0.,          self.Krr],
-        #     [0.,            0.,          self.Mww,      0.,          self.Mqq,    0.],
-        #     [0.,            self.Nvv,    0.,            self.Npp,    0.,          self.Nrr],
-        # ]) * np.array([
-        #     [np.abs(u),     0.,         0.,            0.,           0.,           0.],
-        #     [0.,            np.abs(v),  0.,            np.abs(p),    0.,           np.abs(r)],
-        #     [0.,            0.,         np.abs(w),     0.,           np.abs(q),    0.],
-        #     [0.,            np.abs(v),  0.,            np.abs(p),    0.,           np.abs(r)],
-        #     [0.,            0.,         np.abs(w),     0.,           np.abs(q),    0.],
-        #     [0.,            np.abs(v),  0.,            np.abs(p),    0.,           np.abs(r)],
-        # ])
-        #
-        # D = Dl + Dq
-        #
-        # # ===
-        # # Hydrostatic forces and moments.
-        # W = self.m*9.81
-        # B = self.dispVol*self.rho_f*9.81
-        # # NOTE: G matrix is written as if it were on the LHS, consistently with the
-        # #    notaiton by Fossen (and Kantapon).
-        # G = np.array([
-        #     (W - B) * np.sin(theta),
-        #     -(W - B) * np.cos(theta)*np.sin(phi),
-        #     -(W - B) * np.cos(theta)*np.cos(phi),
-        #     -(self.CG[1]*W - self.CB[1]*B)*np.cos(theta)*np.cos(phi)
-        #         + (self.CG[2]*W - self.CB[2]*B)*np.cos(theta)*np.sin(phi),
-        #     (self.CG[2]*W - self.CB[2]*B)*np.sin(theta)
-        #         + (self.CG[0]*W - self.CB[0]*B)*np.cos(theta)*np.cos(phi),
-        #     -(self.CG[0]*W - self.CB[0]*B)*np.cos(theta)*np.sin(phi)
-        #         - (self.CG[1]*W - self.CB[1]*B)*np.sin(theta)
-        # ])
-        #
-        # # ===
-        # # Externally applied forces and moments.
-        # E = np.zeros(6)
-        #
-        # # ===
-        # # Total forces and moments
-        # RHS = -np.dot(Crb, vel) - np.dot(Ca+D, velRel) - G + H + E
 
-        # ===
         # Solve M*acc = F for accelerations
         # This is done in the vehicle reference frame.
         acc = np.linalg.solve(M, RHS)
 
-        # ===
         # Compute the coordinate transform to go from local to global coords.
         Jtransform = resources.coordinateTransform(phi, theta, psi, dof=6)
         # Apply a coordinate transformation to get velocities in the global coordinates.
         # After the integration this will yield displacements in the global coordinates.
         vel = np.dot(Jtransform, vel)
 
-        # ===
         # Return derivatives of the system along each degree of freedom. The first
         # part of the derivative vector are the rates of change of position in the
         # global reference frame; the second part are the accelerations,
