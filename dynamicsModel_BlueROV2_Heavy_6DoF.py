@@ -46,7 +46,7 @@ class BlueROV2Heavy6DoF:
 
         # Coordinate system centred on CB # +++
         self.CB = np.array([0., 0., 0.])
-        self.CG = np.array([0., 0., 0.02]) # m (relative to the CB) # +++
+        self.CG = np.array([0., 0., 0.025]) # m (relative to the CB) # +++
 
         self.I = np.array([ # kg m2 # +++
             [0.16, 0.,  0.],
@@ -601,26 +601,55 @@ def plotEpisodeDetail(env, title=""):
 
 if __name__ == "__main__":
 
-    # === Test the dynamics ===
+    # === Test roll and pitch decay ===
+
+    # Constants and initial conditions
+    state0 = np.array([
+        0., 0., 0., 0./180.*np.pi, 30./180.*np.pi, 0./180.*np.pi,
+        0., 0., 0., 0., 0., 0.])
+    tMax = 10.
+    rov = BlueROV2Heavy6DoF(np.zeros(6))
+    result_solve_ivp = scipy.integrate.solve_ivp(
+        rov.derivs, (0, tMax), state0, method="DOP853",#'RK45',
+        t_eval=np.arange(0, tMax+1e-3, 0.1), rtol=1e-3, atol=1e-3)
+
+    fig, ax = plt.subplots()
+    ax.set_xlim((0, tMax))
+    for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
+        ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
+        ax.hlines(rov.setPoint[i], result_solve_ivp.t[0], result_solve_ivp.t[-1],
+                  color=ln.get_color(), linestyle="dashed")
+
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
+    plt.show()
+
+    # === Test the dynamics subject to simple control ===
 
     # # Constants and initial conditions
     # dt = 0.25
+    # # state0 = np.array([
+    # #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 0./180.*np.pi,
+    # #     0., 0., 0., 0., 0., 0.])
     # state0 = np.array([
-    #     0., 0., 0., 30./180.*np.pi, -40./180.*np.pi, 150./180.*np.pi,
+    #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 150./180.*np.pi,
     #     0., 0., 0., 0., 0., 0.])
+    # # state0 = np.array([
+    # #     0., 0., 0., 30./180.*np.pi, -40./180.*np.pi, 150./180.*np.pi,
+    # #     0., 0., 0., 0., 0., 0.])
     # tMax = 15.
     # t = np.arange(0.0, tMax, dt)
     #
     # # Set up the vehicle with a single waypoint and desired attitude
-    # rov = BlueROV2Heavy6DoF([1., -1., 0.5, 0./180.*np.pi, 0./180.*np.pi, 280./180.*np.pi])
+    # rov = BlueROV2Heavy6DoF([1., -1., 0.5, -10./180.*np.pi, 10./180.*np.pi, 280./180.*np.pi])
+    # # rov = BlueROV2Heavy6DoF([2., -4.5, 1.5, -10./180.*np.pi, 30./180.*np.pi, 280./180.*np.pi])
     #
     # # Advance in time
     # result_solve_ivp = scipy.integrate.solve_ivp(
     #     rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
     #
     # # Sort out the computed angles.
-    # result_solve_ivp.y[3:, :] = result_solve_ivp.y[3:, :] % (2.*np.pi)
-    #
+    # # result_solve_ivp.y[3:, :] = result_solve_ivp.y[3:, :] % (2.*np.pi)
+    # #
     # # Plot trajectory
     # fig  = plt.figure(figsize=(14, 8))
     # fig.canvas.manager.set_window_title('Test 1 - PID, vehicle class only')
@@ -654,8 +683,7 @@ if __name__ == "__main__":
     #     ax[1].hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
     #
     # ax[1].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
-    # plt.show()
-    #
+
     # # Save the trajectory.
     # with open("./tempData/trajectory.obj", "w") as outfile:
     #     for iTime in range(result_solve_ivp.t.shape[0]):
@@ -666,10 +694,10 @@ if __name__ == "__main__":
 
     # === Test the environment with a constant set point ===
 
-    env = BlueROV2Heavy6DoFEnv(maxSteps=100)
-    env.reset(initialSetpoint=[2., -4.5, 1.5, -10./180.*np.pi, 30./180.*np.pi, 280./180.*np.pi])
-    for i in range(100):
-        env.step(np.zeros(6))
-    plotEpisodeDetail(env, title='Test 2 - PID, env class')
+    # env = BlueROV2Heavy6DoFEnv(maxSteps=100)
+    # env.reset(initialSetpoint=[2., -4.5, 1.5, -10./180.*np.pi, 30./180.*np.pi, 280./180.*np.pi])
+    # for i in range(100):
+    #     env.step(np.zeros(6))
+    # plotEpisodeDetail(env, title='Test 2 - PID, env class')
 
     plt.show()

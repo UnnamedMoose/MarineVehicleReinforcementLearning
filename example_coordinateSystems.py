@@ -14,6 +14,8 @@ from matplotlib.widgets import Slider
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+import resources
+
 class RovTemp(object):
     def __init__(self):
         # Set the coordinate transform matrix, its inverse, and vehicle axes unit vectors.
@@ -175,17 +177,49 @@ class RovTemp(object):
     def makeCfdInputs(self):
         # Mass, displacement and inertia matrices.
         # Simplified.
-        vol = 0.00431693738
-        m = vol*1000
-        x_cb = np.array([0.013943957, 0, 0.065015371])
-        I = np.array([3.45979819e-05, 5.19465479e-05, 7.68650067e-05])*1000.
+        # vol = 0.00431693738
+        # m = vol*1000
+        # x_cb = np.array([0.013943957, 0, 0.065015371])
+        # I = np.array([3.45979819e-05, 5.19465479e-05, 7.68650067e-05])*1000.
 
         # Full
-        # vol = 0.00814973
-        # m = vol*1000
-        # x_cb = np.array([0.0104145, 0, 0.0959112])
-        # I = np.array([0.000130705, 0.0001286, 0.000196422])*1000.
+        vol = 0.00814973
+        m = vol*1000
+        x_cb = np.array([0.0104145, 0, 0.0959112])
+        I = np.array([0.000130705, 0.0001286, 0.000196422])*1000.
 
+# TODO
+"""
+      <centerOfMass>0.0104145 0 0.1</centerOfMass>
+      <structProperties>
+        <matrices>
+          <mass>
+            <m11>8.14973</m11>
+            <m22>8.14973</m22>
+            <m33>8.14973</m33>
+            <m44>0.130705</m44>
+            <m55>0.1286</m55>
+            <m66>0.196422</m66>
+          </mass>
+          <stiffness>
+            <c11>0.0</c11>
+            <c22>0.0</c22>
+            <c33>0.0</c33>
+            <c44>0.0</c44>
+            <c55>0.0</c55>
+            <c66>0.0</c66>
+          </stiffness>
+          <damping>
+            <b11>0.0</b11>
+            <b22>0.0</b22>
+            <b33>0.0</b33>
+            <b44>0.0</b44>
+            <b55>0.0</b55>
+            <b66>0.0</b66>
+          </damping>
+        </matrices>
+      </structProperties>
+"""
         # Redo with the right origin.
         A, Ainv = resources.computeThrustAllocation(self.thrusterPositions, self.thrusterNormals, x0=x_cb-self.xCG)
 
