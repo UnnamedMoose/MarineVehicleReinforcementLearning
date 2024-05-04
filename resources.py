@@ -43,6 +43,34 @@ def plotCoordSystem(ax, iHat, jHat, kHat, x0=np.zeros(3), ds=0.45, ls="-"):
     lns += ax.plot([x0[0], x3[0]], [x0[1], x3[1]], [x0[2], x3[2]], "b", ls=ls, lw=2)
     return lns
 
+def plotIvpRes6dof(result, comp="disp"):
+    fig, ax1 = plt.subplots()
+    colours = plt.cm.gist_rainbow(np.linspace(0.1, 0.9, 6))
+    ax1.set_xlim((0, result.t[-1]))
+    ax2 = ax1.twinx()
+    ax1.set_xlabel("Time [s]")
+    if comp == "disp":
+        ax1.set_ylabel("Linear displacement [m]")
+        ax2.set_ylabel("Angular displacement [deg]")
+        names = ["x", "y", "z", "$\phi$", "$\\theta$", "$\psi$"]
+        di = 0
+    elif comp == "vel":
+        ax1.set_ylabel("Linear velocity [m]")
+        ax2.set_ylabel("Angular velocity [deg/s]")
+        names = ["u", "v", "w", "p", "q", "r"]
+        di = 6
+    else:
+        raise ValueError("what are we plotting, exactly?")
+    plt.subplots_adjust(top=0.85, bottom=0.137, left=0.144, right=0.896)
+    lns = []
+    for i in range(3):
+        lns += ax1.plot(result.t, result.y[i+di, :], c=colours[i], label=names[i])
+    for i in range(3):
+        lns += ax2.plot(result.t, result.y[i+3+di, :]/np.pi*180., c=colours[i+3], label=names[i+3])
+    fig.legend(lns, [l.get_label() for l in lns], loc="upper center", ncol=3)
+
+    return fig, ax1, ax2
+
 def angleError(psi_d, psi):
     """
     Function used for computing signed heading error that wraps around pi properly.

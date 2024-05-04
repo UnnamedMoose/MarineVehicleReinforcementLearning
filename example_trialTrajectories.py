@@ -86,7 +86,7 @@ ax.set_xlim((0, tMax))
 for result_solve_ivp in history:
     lns = []
     colours = plt.cm.Set2(np.linspace(0.1, 0.9, 6))
-    for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
+    for i, v in enumerate(["x", "y", "z", "phi", "theta", "psi"]):
         lns += ax.plot(result_solve_ivp.t+tTot, result_solve_ivp.y[i, :], c=colours[i], label=v)
         ax.hlines(rov.setPoint[i], result_solve_ivp.t[0]+tTot, result_solve_ivp.t[-1]+tTot,
                   color=lns[-1].get_color(), linestyle="dashed")

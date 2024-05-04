@@ -25,11 +25,14 @@ matplotlib.rcParams["figure.figsize"] = (9, 6)
 import resources
 
 class BlueROV2Heavy6DoF:
-    def __init__(self, setPoint):
+    def __init__(self, setPoint, disableThrusters=False):
         # Target set point (position and heading).
         # Should give reasonable behaviour - go to a point and
         # maintain a constant heading.
         self.setPoint = setPoint
+
+        # For overriding actuation.
+        self.disableThrusters = disableThrusters
 
         # Stuff for the PID controller.
         self.eOld = None
@@ -194,7 +197,7 @@ class BlueROV2Heavy6DoF:
     def vehicleToGlobal(self, vecVehicle):
         return vecVehicle[0]*self.iHat + vecVehicle[1]*self.jHat + vecVehicle[2]*self.kHat
 
-    def forceModel(self, pos, vel, angles, rpms):
+    def forceModel(self, pos, angles, vel, rpms, retComp=False):
         phi, theta, psi = angles
         u, v, w, p, q, r = vel
 
@@ -206,6 +209,10 @@ class BlueROV2Heavy6DoF:
         if np.linalg.norm(velCurrent) > 0.:
             velCurrent = self.globalToVehicle(velCurrent)
 
+        # Relative fluid velocity. For added mass, assume rate of change of fluid
+        # velocity is much smaller than that of the vehicle, hence d/dt(v-vc) = dv/dt.
+        velRel = vel - velCurrent
+
         # Apply saturation and deadband to model the discrepancy between required
         # and possible thruster output.
         def limit(x):
@@ -216,13 +223,10 @@ class BlueROV2Heavy6DoF:
 
         # Hydrodynamic forces excluding added mass terms.
         H = np.zeros(6)
-        for i in range(8):
-            # Thruster model.
-            H += self.thrusterModel(limit(rpms[i]))*self.A[:, i]
-
-        # Relative fluid velocity. For added mass, assume rate of change of fluid
-        # velocity is much smaller than that of the vehicle, hence d/dt(v-vc) = dv/dt.
-        velRel = vel - velCurrent
+        if not self.disableThrusters:
+            for i in range(8):
+                # Thruster model.
+                H += self.thrusterModel(limit(rpms[i]))*self.A[:, i]
 
         # ===
         # Total Mass Matrix (or inertia matrix), including added mass terms.
@@ -268,9 +272,22 @@ class BlueROV2Heavy6DoF:
                  self.m*(self.CG[1]*r - u),
                 -self.m*(self.CG[0]*p + self.CG[1]*q),
                 -self.I[1,2]*r - self.I[0,1]*p + self.I[1,1]*q,
-                 self.I[0,2]*r + self.I[0,1]*q - self.I[0,0]*q,
+                # !!! In Kantapon's thesis this is Ixx q but in Fossen's book it's Ixx p
+                 self.I[0,2]*r + self.I[0,1]*q - self.I[0,0]*p,
                 0.],
         ])
+        # if retComp:
+        #     def printVec(vec):
+        #         print(" ".join(["{:.6f}".format(v) for v in vec]))
+        #     print("===")
+        #     for i in range(6):
+        #         printVec(-Crb[i, :]*vel)
+        #     print("---")
+        #     printVec(vel)
+        #     print("---")
+        #     printVec(-np.dot(Crb, vel))
+        #     print("---")
+        #     print(self.I[0,0]*q)
 
         Ca = np.array([
             [0.,            0.,                0.,                0.,                -self.Zwdot*w,    self.Yvdot*v],
@@ -336,7 +353,12 @@ class BlueROV2Heavy6DoF:
         # Total forces and moments
         RHS = -np.dot(Crb, vel) - np.dot(Ca+D, velRel) - G + H + E
 
-        return M, RHS
+        # Return either the mass+added mass and sum of forces and moments, or individual
+        # components for retroactive computation of a time history.
+        if retComp:
+            return np.vstack([-np.dot(Crb, vel), -np.dot(Ca, vel), -np.dot(D, vel), G, H]).T
+        else:
+            return M, RHS
 
     def derivs(self, t, state):
 
@@ -380,7 +402,7 @@ class BlueROV2Heavy6DoF:
         self.controlVector = cv
 
         # Call the force model for the current state.
-        M, RHS = self.forceModel(pos, vel, angles, cv)
+        M, RHS = self.forceModel(pos, angles, vel, cv)
 
         # Solve M*acc = F for accelerations
         # This is done in the vehicle reference frame.
@@ -604,85 +626,97 @@ if __name__ == "__main__":
     # === Test roll and pitch decay ===
 
     # Constants and initial conditions
-    state0 = np.array([
-        0., 0., 0., 0./180.*np.pi, 30./180.*np.pi, 0./180.*np.pi,
-        0., 0., 0., 0., 0., 0.])
-    tMax = 10.
-    rov = BlueROV2Heavy6DoF(np.zeros(6))
-    result_solve_ivp = scipy.integrate.solve_ivp(
-        rov.derivs, (0, tMax), state0, method="DOP853",#'RK45',
-        t_eval=np.arange(0, tMax+1e-3, 0.1), rtol=1e-3, atol=1e-3)
-
-    fig, ax = plt.subplots()
-    ax.set_xlim((0, tMax))
-    for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
-        ln, = ax.plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-        ax.hlines(rov.setPoint[i], result_solve_ivp.t[0], result_solve_ivp.t[-1],
-                  color=ln.get_color(), linestyle="dashed")
-
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
-    plt.show()
+    # state0 = np.array([
+    #     0., 0., 0., 0./180.*np.pi, 30./180.*np.pi, 130./180.*np.pi,
+    #     0., 0., 0., 0., 0., 0.])
+    # tMax = 10.
+    # rov = BlueROV2Heavy6DoF(np.zeros(6), disableThrusters=True)
+    #
+    # result_solve_ivp = scipy.integrate.solve_ivp(
+    #     rov.derivs, (0, tMax), state0, method='RK45',
+    #     t_eval=np.arange(0, tMax+1e-3, 0.1), rtol=1e-3, atol=1e-3)
+    #
+    # forces = []
+    # for i in range(result_solve_ivp.t.shape[0]):
+    #     # print("t = {:.6f} s".format(result_solve_ivp.t[i]))
+    #     forces.append(rov.forceModel(result_solve_ivp.y[:3, i], result_solve_ivp.y[3:6, i],
+    #         result_solve_ivp.y[6:, i], np.zeros(8), retComp=True))
+    # # Reorder to (time, term, component)
+    # forces = np.transpose(np.array(forces), (0, 2, 1))
+    #
+    # for k in [3, 4, 5]:
+    #     fig, ax = plt.subplots()
+    #     ax.set_title(k)
+    #     ax.set_xlabel("Time [s]")
+    #     for i, term in enumerate(["Crb", "Ca", "D", "G", "H"]):
+    #         ax.plot(result_solve_ivp.t, forces[:, i, k], label=term)
+    #     ax.legend()
+    #
+    # resources.plotIvpRes6dof(result_solve_ivp, "disp")
+    # resources.plotIvpRes6dof(result_solve_ivp, "vel")
+    #
+    # plt.show()
 
     # === Test the dynamics subject to simple control ===
 
-    # # Constants and initial conditions
-    # dt = 0.25
-    # # state0 = np.array([
-    # #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 0./180.*np.pi,
-    # #     0., 0., 0., 0., 0., 0.])
+    # Constants and initial conditions
+    dt = 0.25
     # state0 = np.array([
-    #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 150./180.*np.pi,
+    #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 0./180.*np.pi,
     #     0., 0., 0., 0., 0., 0.])
-    # # state0 = np.array([
-    # #     0., 0., 0., 30./180.*np.pi, -40./180.*np.pi, 150./180.*np.pi,
-    # #     0., 0., 0., 0., 0., 0.])
-    # tMax = 15.
-    # t = np.arange(0.0, tMax, dt)
-    #
-    # # Set up the vehicle with a single waypoint and desired attitude
+    state0 = np.array([
+        0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 150./180.*np.pi,
+        0., 0., 0., 0., 0., 0.])
+    # state0 = np.array([
+    #     0., 0., 0., 30./180.*np.pi, -40./180.*np.pi, 150./180.*np.pi,
+    #     0., 0., 0., 0., 0., 0.])
+    tMax = 15.
+    t = np.arange(0.0, tMax, dt)
+
+    # Set up the vehicle with a single waypoint and desired attitude
     # rov = BlueROV2Heavy6DoF([1., -1., 0.5, -10./180.*np.pi, 10./180.*np.pi, 280./180.*np.pi])
-    # # rov = BlueROV2Heavy6DoF([2., -4.5, 1.5, -10./180.*np.pi, 30./180.*np.pi, 280./180.*np.pi])
+    rov = BlueROV2Heavy6DoF([2., -4.5, 1.5, -10./180.*np.pi, 10./180.*np.pi, 280./180.*np.pi])
+
+    # Advance in time
+    result_solve_ivp = scipy.integrate.solve_ivp(
+        rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
+
+    # Sort out the computed angles.
+    # result_solve_ivp.y[3:, :] = result_solve_ivp.y[3:, :] % (2.*np.pi)
     #
-    # # Advance in time
-    # result_solve_ivp = scipy.integrate.solve_ivp(
-    #     rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
-    #
-    # # Sort out the computed angles.
-    # # result_solve_ivp.y[3:, :] = result_solve_ivp.y[3:, :] % (2.*np.pi)
-    # #
-    # # Plot trajectory
-    # fig  = plt.figure(figsize=(14, 8))
-    # fig.canvas.manager.set_window_title('Test 1 - PID, vehicle class only')
-    # ax = [
-    #     fig.add_subplot(1, 2, 1, projection='3d'),
-    #     fig.add_subplot(1, 2, 2),
-    # ]
-    # ax[0].set_xlabel("x")
-    # ax[0].set_ylabel("y")
-    # ax[0].set_zlabel("z")
-    # ax[0].set_aspect("equal")
-    # ax[0].invert_yaxis()  # NED and y +ve to stbd
-    # ax[0].invert_zaxis()
-    # ax[0].plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], result_solve_ivp.y[2, :], "r", label="Trajectory")
-    # ax[0].plot(rov.setPoint[0], rov.setPoint[1], rov.setPoint[2], "ko", label="Waypoint")
-    # # Plot the coordinate systems throughout the episode.
-    # for i in range(0, result_solve_ivp.y.shape[1], 10):
-    #     rov.updateMovingCoordSystem(result_solve_ivp.y[3:6, i])
-    #     if i == 0:
-    #         ls = "-"
-    #     else:
-    #         ls = "--"
-    #     resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=result_solve_ivp.y[:3, i], ls=ls)
-    # ax[0].set_aspect("equal")
-    # ax[0].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
-    #
-    # # Plot individual DoFs
-    # ax[1].set_xlim((0, tMax))
-    # for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
-    #     ln, = ax[1].plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-    #     ax[1].hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
-    #
-    # ax[1].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
+    # Plot trajectory
+    fig  = plt.figure(figsize=(14, 8))
+    fig.canvas.manager.set_window_title('Test 1 - PID, vehicle class only')
+    ax = [
+        fig.add_subplot(1, 2, 1, projection='3d'),
+        fig.add_subplot(1, 2, 2),
+    ]
+    ax[0].set_xlabel("x")
+    ax[0].set_ylabel("y")
+    ax[0].set_zlabel("z")
+    ax[0].set_aspect("equal")
+    ax[0].invert_yaxis()  # NED and y +ve to stbd
+    ax[0].invert_zaxis()
+    ax[0].plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], result_solve_ivp.y[2, :], "r", label="Trajectory")
+    ax[0].plot(rov.setPoint[0], rov.setPoint[1], rov.setPoint[2], "ko", label="Waypoint")
+    # Plot the coordinate systems throughout the episode.
+    for i in range(0, result_solve_ivp.y.shape[1], 10):
+        rov.updateMovingCoordSystem(result_solve_ivp.y[3:6, i])
+        if i == 0:
+            ls = "-"
+        else:
+            ls = "--"
+        resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=result_solve_ivp.y[:3, i], ls=ls)
+    ax[0].set_aspect("equal")
+    ax[0].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=2)
+
+    # Plot individual DoFs
+    ax[1].set_xlim((0, tMax))
+    for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
+        ln, = ax[1].plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
+        ax[1].hlines(rov.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+
+    ax[1].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
 
     # # Save the trajectory.
     # with open("./tempData/trajectory.obj", "w") as outfile:
