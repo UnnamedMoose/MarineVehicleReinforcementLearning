@@ -16,6 +16,8 @@ font = {"family": "serif",
 matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
+saveFigs = True
+
 # DOFs = ["X", "Y", "Z", "PHI", "THETA", "PSI"]
 DOFs = ["x", "y", "z", "phi", "theta", "psi"]
 velocityNames = ["u", "v", "w", "p", "q", "r"]
@@ -134,23 +136,29 @@ axes[-1, 0].set_xlabel("s")
 axes[-1, 1].set_xlabel("s")
 order = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]
 scales = [1., 1., 1., 180./np.pi, 180./np.pi, 180./np.pi]
+units = ["m", "m", "m", "deg", "deg", "deg"]
 for i, dof in enumerate(DOFs):
     ax = axes[order[i][0], order[i][1]]
-    ax.set_ylabel(dof)
+    ax.set_ylabel("{} [{}]".format(dof, units[i]))
     lns = ax.plot(s, ys[i]*scales[i], "o", color="r", ms=6, label="Generated points")
     lns += ax.plot(snew, ynews[i]*scales[i], "k-", lw=2, zorder=-10, label="Smooth trajectory")
 fig.legend(lns, [l.get_label() for l in lns], ncol=2, loc="upper center")
+if saveFigs:
+    plt.savefig("./Figures/randomTrajectory_input.png", dpi=200, bbox_inches="tight")
 
 # Plot individual DoFs
-fig, ax = plt.subplots()
-colours = plt.cm.Set2(np.linspace(0.1, 0.9, 6))
-lns = []
-for i, t in enumerate(DOFs):
-    lns += ax.plot(history["t"], history[t], "-", lw=2, c=colours[i], label=t)
-    ax.plot(history["t"], history[t+"_d"], "--", lw=1, c=colours[i])
-
-ax.legend(lns, [l.get_label() for l in lns], loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
-plt.show()
+fig, axes = plt.subplots(3, 2, figsize=(12, 10))
+plt.subplots_adjust(top=0.937, bottom=0.091, left=0.108, right=0.98, hspace=0.405, wspace=0.304)
+axes[-1, 0].set_xlabel("Time [s]")
+axes[-1, 1].set_xlabel("Time [s]")
+for i, dof in enumerate(DOFs):
+    ax = axes[order[i][0], order[i][1]]
+    ax.set_ylabel("{} [{}]".format(dof, units[i]))
+    lns = ax.plot(history["t"], history[dof]*scales[i], "-", lw=2, c="r", label="Result")
+    lns += ax.plot(history["t"], history[dof+"_d"]*scales[i], "--", lw=1, c="k", label="Demand")
+fig.legend(lns, [l.get_label() for l in lns], ncol=2, loc="upper center")
+if saveFigs:
+    plt.savefig("./Figures/randomTrajectory_result_detailed.png", dpi=200, bbox_inches="tight")
 
 # Plot trajectory in 3D.
 fig  = plt.figure(figsize=(8, 8))
@@ -174,5 +182,7 @@ for i in dfWpsCoarse.index:
     rov.updateMovingCoordSystem(dfWpsCoarse.loc[i, ["phi", "theta", "psi"]].values)
     resources.plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat, x0=dfWpsCoarse.loc[i, ["x", "y", "z"]].values,
         ds=dofRange["x"]/4., ls="--")
+# if saveFigs:
+#     plt.savefig("./Figures/randomTrajectory_result.png", dpi=200, bbox_inches="tight")
 
 plt.show()
