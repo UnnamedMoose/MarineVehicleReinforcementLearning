@@ -28,7 +28,7 @@ ds = 1.
 dsFine = ds/15.
 nPts = 5
 
-dofRange = dict(zip(DOFs, [0.2, 0.2, 0.2, 15./180.*np.pi, 15./180.*np.pi, np.pi]))
+dofRange = dict(zip(DOFs, [0.2, 0.2, 0.2, 25./180.*np.pi, 25./180.*np.pi, np.pi]))
 
 s = np.arange(0, nPts*ds+ds/2., ds)
 snew = np.arange(s[0], s[-1]+dsFine/2., dsFine)
@@ -129,14 +129,16 @@ while iWp < dfWps.shape[0]-1:
     # Grab the initial state for the next WP.
     state = result_solve_ivp.y[:, -1]
 
+# Common for plotting individual DOFs.
+order = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]
+scales = [1., 1., 1., 180./np.pi, 180./np.pi, 180./np.pi]
+units = ["m", "m", "m", "deg", "deg", "deg"]
+
 # Plot the generated trajectory.
 fig, axes = plt.subplots(3, 2, figsize=(12, 10))
 plt.subplots_adjust(top=0.937, bottom=0.091, left=0.108, right=0.98, hspace=0.405, wspace=0.304)
 axes[-1, 0].set_xlabel("s")
 axes[-1, 1].set_xlabel("s")
-order = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]
-scales = [1., 1., 1., 180./np.pi, 180./np.pi, 180./np.pi]
-units = ["m", "m", "m", "deg", "deg", "deg"]
 for i, dof in enumerate(DOFs):
     ax = axes[order[i][0], order[i][1]]
     ax.set_ylabel("{} [{}]".format(dof, units[i]))
@@ -161,7 +163,7 @@ if saveFigs:
     plt.savefig("./Figures/randomTrajectory_result_detailed.png", dpi=200, bbox_inches="tight")
 
 # Plot trajectory in 3D.
-fig  = plt.figure(figsize=(8, 8))
+fig = plt.figure(figsize=(8, 8))
 plt.subplots_adjust(top=0.973, bottom=0.034, left=0.03, right=0.97)
 ax = fig.add_subplot(projection='3d')
 ax.set_xlabel("x")
@@ -182,7 +184,7 @@ for i in dfWpsCoarse.index:
     rov.updateMovingCoordSystem(dfWpsCoarse.loc[i, ["phi", "theta", "psi"]].values)
     resources.plotCoordSystem(ax, rov.iHat, rov.jHat, rov.kHat, x0=dfWpsCoarse.loc[i, ["x", "y", "z"]].values,
         ds=dofRange["x"]/4., ls="--")
-# if saveFigs:
-#     plt.savefig("./Figures/randomTrajectory_result.png", dpi=200, bbox_inches="tight")
+if saveFigs:
+    plt.savefig("./Figures/randomTrajectory_result.png", dpi=200, bbox_inches="tight")
 
 plt.show()

@@ -44,13 +44,20 @@ class BlueROV2Heavy6DoF_PID_controller(object):
 
         # Generalised forces and moments from the controller
         windup = np.array([2., 2., 2., 90./180.*np.pi, 90./180.*np.pi, 90./180.*np.pi])
-        forceMomentMaxMagnitudes = [50., 50., 50., 0.25, 0.25, 2.]
-        K_P = np.array([25., 25., 25., 0.5, 0.5, 1.])
+        # forceMomentMaxMagnitudes = [50., 50., 50., 0.25, 0.25, 2.]
+        # K_P = np.array([25., 25., 25., 0.5, 0.5, 1.])
+        # K_I = np.array([2., 2., 2., 0.1, 0.1, 0.2])
+        # K_D = np.array([20., 20., 20., 0.1, 0.1, 0.65])
+        forceMomentMaxMagnitudes = [50., 50., 50., 2., 2., 2.]
+        K_P = np.array([25., 25., 25., 10., 10., 1.])
         K_I = np.array([2., 2., 2., 0.1, 0.1, 0.2])
-        K_D = np.array([20., 20., 20., 0.1, 0.1, 0.65])
+        K_D = np.array([20., 20., 20., 5., 5., 0.65])
         e = np.append(self.setPoint[:3] - np.array([x, y, z]),
-                      [resources.angleError(self.setPoint[3], phi),
-                      resources.angleError(self.setPoint[4], theta),
+                      [
+                      # [resources.angleError(self.setPoint[3], phi),
+                      # resources.angleError(self.setPoint[4], theta),
+                      self.setPoint[3] - phi,
+                      self.setPoint[4] - theta,
                       resources.angleError(self.setPoint[5], psi)])
         if self.eOld is None:
             self.eOld = e.copy()
@@ -83,7 +90,7 @@ class BlueROV2Heavy6DoF(object):
 
         # Coordinate system centred on CB # +++
         self.CB = np.array([0., 0., 0.])
-        self.CG = np.array([0., 0., 0.025]) # m (relative to the CB) # +++
+        self.CG = np.array([0., 0., 0.05]) # m (relative to the CB) # +++
 
         self.I = np.array([ # kg m2 # +++
             [0.16, 0.,  0.],
@@ -101,56 +108,55 @@ class BlueROV2Heavy6DoF(object):
         # Added mass and intertia
         self.Xudot = -5.5 # kg # +++
         self.Yvdot = -12.7 # +++
-
-        # TODO check values in reference
-        self.Zvdot = 0.
-        self.Zwdot = -12.7
+        self.Zwdot = -14.57
         self.Kpdot = -0.12
         self.Mqdot = -0.12
-
         self.Nrdot = -0.12 # kg m^2 / rad # +++
+
         # Cross-coupling terms.
+        # TODO check values in reference
         self.Yrdot = 0.
+        self.Zvdot = 0.
         self.Nvdot = 0.
 
         # ---
         # Quadratic terms.
         self.Xuu = -18.18 # kg/m # +++
         self.Yvv = -21.66 # +++
+        self.Zww = -36.99
+        self.Kpp = -1.55
+        self.Mqq = -1.55 # kg m^2 / rad^2
+        self.Nrr = -1.55 # kg m^2 / rad^2
+
         self.Yrr = 0.
         self.Ypp = 0.
 
         # TODO check values in reference
-        self.Zww = -21.0
         self.Zqq = 0.
         self.Kvv = 0.
-        self.Kpp = 0.
         self.Krr = 0.
         self.Mww = -1.55
-        self.Mqq = -1.55 # kg m^2 / rad^2
 
         self.Nvv = 0.0 # kg
-        self.Nrr = -1.55 # kg m^2 / rad^2 # +++ # TODO maybe wrong units?
         self.Npp = 0.
 
         # ---
         # Linear damping terms - same as Kantapon but divided by velocity and density
         self.Xu = -4.03 # +++
         self.Yv = -6.22 # +++
-        self.Yr = 0.
-        self.Yp = 0.
+        self.Zw = -5.18
+        self.Kp = -0.07
+        self.Mq = -0.07
+        self.Nr = -0.07 # +++
 
         # TODO check values in reference
-        self.Zw = 0.
+        self.Yr = 0.
+        self.Yp = 0.
         self.Zq = 0.
         self.Kv = 0.
-        self.Kp = -0.07
         self.Kr = 0.
         self.Mw = 0.
-        self.Mq = -0.07
-
         self.Nv = 0.
-        self.Nr = -0.07 # +++
         self.Np = 0.
 
         # ===
@@ -324,18 +330,6 @@ class BlueROV2Heavy6DoF(object):
                  self.I[0,2]*r + self.I[0,1]*q - self.I[0,0]*p,
                 0.],
         ])
-        # if retComp:
-        #     def printVec(vec):
-        #         print(" ".join(["{:.6f}".format(v) for v in vec]))
-        #     print("===")
-        #     for i in range(6):
-        #         printVec(-Crb[i, :]*vel)
-        #     print("---")
-        #     printVec(vel)
-        #     print("---")
-        #     printVec(-np.dot(Crb, vel))
-        #     print("---")
-        #     print(self.I[0,0]*q)
 
         Ca = np.array([
             [0.,            0.,                0.,                0.,                -self.Zwdot*w,    self.Yvdot*v],
@@ -661,7 +655,7 @@ if __name__ == "__main__":
 
     # # Constants and initial conditions
     # state0 = np.array([
-    #     0., 0., 0., 0./180.*np.pi, 30./180.*np.pi, 130./180.*np.pi,
+    #     0., 0., 0., -50./180.*np.pi, 30./180.*np.pi, 130./180.*np.pi,
     #     0., 0., 0., 0., 0., 0.])
     # tMax = 10.
     # rov = BlueROV2Heavy6DoF(BlueROV2Heavy6DoF_PID_controller(np.zeros(6)), disableThrusters=True)
@@ -691,73 +685,64 @@ if __name__ == "__main__":
 
     # === Test the dynamics subject to simple control ===
 
-    # # Constants and initial conditions
-    # dt = 0.25
-    # # state0 = np.array([
-    # #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 0./180.*np.pi,
-    # #     0., 0., 0., 0., 0., 0.])
-    # state0 = np.array([
-    #     0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 150./180.*np.pi,
-    #     0., 0., 0., 0., 0., 0.])
-    # # state0 = np.array([
-    # #     0., 0., 0., 30./180.*np.pi, -40./180.*np.pi, 150./180.*np.pi,
-    # #     0., 0., 0., 0., 0., 0.])
-    # tMax = 15.
-    # t = np.arange(0.0, tMax, dt)
-    #
-    # # Create a controller.
-    # controller = BlueROV2Heavy6DoF_PID_controller([2., -4.5, 1.5, -10./180.*np.pi, 10./180.*np.pi, 280./180.*np.pi])
-    #
-    # # Set up the vehicle with a single waypoint and desired attitude
-    # rov = BlueROV2Heavy6DoF(controller)
-    #
-    # # Advance in time
-    # result_solve_ivp = scipy.integrate.solve_ivp(
-    #     rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
-    #
-    # # Sort out the computed angles.
-    # # result_solve_ivp.y[3:, :] = result_solve_ivp.y[3:, :] % (2.*np.pi)
-    # #
-    # # Plot trajectory
-    # fig  = plt.figure(figsize=(14, 8))
-    # fig.canvas.manager.set_window_title('Test 1 - PID, vehicle class only')
-    # ax = [
-    #     fig.add_subplot(1, 2, 1, projection='3d'),
-    #     fig.add_subplot(1, 2, 2),
-    # ]
-    # ax[0].set_xlabel("x")
-    # ax[0].set_ylabel("y")
-    # ax[0].set_zlabel("z")
-    # ax[0].set_aspect("equal")
-    # ax[0].invert_yaxis()  # NED and y +ve to stbd
-    # ax[0].invert_zaxis()
-    #
-    # ax[0].plot(result_solve_ivp.y[0, 0], result_solve_ivp.y[1, 0], result_solve_ivp.y[2, 0], "ks", label="Start")
-    #
-    # ax[0].plot(rov.controller.setPoint[0], rov.controller.setPoint[1], rov.controller.setPoint[2], "ko", label="Waypoint")
-    # rov.updateMovingCoordSystem(rov.controller.setPoint[3:])
-    # resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=rov.controller.setPoint[:3], ls="-")
-    #
-    # ax[0].plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], result_solve_ivp.y[2, :], "r", label="Trajectory")
-    #
-    # # Plot the coordinate systems throughout the episode.
-    # for i in range(0, result_solve_ivp.y.shape[1], 10):
-    #     rov.updateMovingCoordSystem(result_solve_ivp.y[3:6, i])
-    #     if i == 0:
-    #         ls = "-"
-    #     else:
-    #         ls = "--"
-    #     resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=result_solve_ivp.y[:3, i], ls=ls)
-    # ax[0].set_aspect("equal")
-    # ax[0].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
-    #
-    # # Plot individual DoFs
-    # ax[1].set_xlim((0, tMax))
-    # for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
-    #     ln, = ax[1].plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
-    #     ax[1].hlines(rov.controller.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
-    #
-    # ax[1].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
+    # Constants and initial conditions
+    dt = 0.25
+    state0 = np.array([
+        0., 0., 0., 0./180.*np.pi, 0./180.*np.pi, 150./180.*np.pi,
+        0., 0., 0., 0., 0., 0.])
+    tMax = 15.
+    t = np.arange(0.0, tMax, dt)
+
+    # Create a controller.
+    controller = BlueROV2Heavy6DoF_PID_controller([2., -4.5, 1.5, -40./180.*np.pi, 35./180.*np.pi, 280./180.*np.pi])
+
+    # Set up the vehicle with a single waypoint and desired attitude
+    rov = BlueROV2Heavy6DoF(controller)
+
+    # Advance in time
+    result_solve_ivp = scipy.integrate.solve_ivp(
+        rov.derivs, (0, tMax), state0, method='RK45', t_eval=t, rtol=1e-3, atol=1e-3)
+
+    # Plot trajectory
+    fig  = plt.figure(figsize=(14, 8))
+    fig.canvas.manager.set_window_title('Test 1 - PID, vehicle class only')
+    ax = [
+        fig.add_subplot(1, 2, 1, projection='3d'),
+        fig.add_subplot(1, 2, 2),
+    ]
+    ax[0].set_xlabel("x")
+    ax[0].set_ylabel("y")
+    ax[0].set_zlabel("z")
+    ax[0].set_aspect("equal")
+    ax[0].invert_yaxis()  # NED and y +ve to stbd
+    ax[0].invert_zaxis()
+
+    ax[0].plot(result_solve_ivp.y[0, 0], result_solve_ivp.y[1, 0], result_solve_ivp.y[2, 0], "ks", label="Start")
+
+    ax[0].plot(rov.controller.setPoint[0], rov.controller.setPoint[1], rov.controller.setPoint[2], "ko", label="Waypoint")
+    rov.updateMovingCoordSystem(rov.controller.setPoint[3:])
+    resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=rov.controller.setPoint[:3], ls="-")
+
+    ax[0].plot(result_solve_ivp.y[0, :], result_solve_ivp.y[1, :], result_solve_ivp.y[2, :], "r", label="Trajectory")
+
+    # Plot the coordinate systems throughout the episode.
+    for i in range(0, result_solve_ivp.y.shape[1], 10):
+        rov.updateMovingCoordSystem(result_solve_ivp.y[3:6, i])
+        if i == 0:
+            ls = "-"
+        else:
+            ls = "--"
+        resources.plotCoordSystem(ax[0], rov.iHat, rov.jHat, rov.kHat, x0=result_solve_ivp.y[:3, i], ls=ls)
+    ax[0].set_aspect("equal")
+    ax[0].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
+
+    # Plot individual DoFs
+    ax[1].set_xlim((0, tMax))
+    for i, v in enumerate(["x", "y", "z", "theta", "phi", "psi"]):
+        ln, = ax[1].plot(result_solve_ivp.t, result_solve_ivp.y[i, :], label=v)
+        ax[1].hlines(rov.controller.setPoint[i], 0, tMax, color=ln.get_color(), linestyle="dashed")
+
+    ax[1].legend(loc="lower center", bbox_to_anchor=(0.5, 1.01), ncol=3)
 
     # # Save the trajectory.
     # with open("./tempData/trajectory.obj", "w") as outfile:
@@ -769,10 +754,10 @@ if __name__ == "__main__":
 
     # === Test the environment with a constant set point ===
 
-    env = BlueROV2Heavy6DoFEnv(maxSteps=100)
-    env.reset(initialSetpoint=[2., -4.5, 1.5, -10./180.*np.pi, 30./180.*np.pi, 280./180.*np.pi])
-    for i in range(100):
-        env.step(np.zeros(6))
-    plotEpisodeDetail(env, title='Test 2 - PID, env class')
+    # env = BlueROV2Heavy6DoFEnv(maxSteps=100)
+    # env.reset(initialSetpoint=[2., -4.5, 1.5, -10./180.*np.pi, 30./180.*np.pi, 280./180.*np.pi])
+    # for i in range(100):
+    #     env.step(np.zeros(6))
+    # plotEpisodeDetail(env, title='Test 2 - PID, env class')
 
     plt.show()
