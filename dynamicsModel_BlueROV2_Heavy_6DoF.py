@@ -31,6 +31,10 @@ class BlueROV2Heavy6DoF_PID_controller(object):
         # maintain a constant heading.
         self.setPoint = setPoint
 
+        # Reset time integral and derivative.
+        self.reset()
+
+    def reset(self):
         # Stuff for the PID controller.
         self.eOld = None
         self.eInt = np.zeros(6)
