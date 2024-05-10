@@ -71,6 +71,7 @@ def plotIvpRes6dof(result, comp="disp"):
 
     return fig, ax1, ax2
 
+
 def angleError(psi_d, psi):
     """
     Function used for computing signed heading error that wraps around pi properly.
