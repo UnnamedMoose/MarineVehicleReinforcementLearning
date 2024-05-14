@@ -16,7 +16,10 @@ font = {"family": "serif",
 matplotlib.rc("font", **font)
 matplotlib.rcParams["figure.figsize"] = (9, 6)
 
-saveFigs = True
+saveFigs = False
+
+saveData = False
+dataLabel = "N_51_v0"
 
 # DOFs = ["X", "Y", "Z", "PHI", "THETA", "PSI"]
 DOFs = ["x", "y", "z", "phi", "theta", "psi"]
@@ -26,7 +29,7 @@ massNames = ["mx", "my", "mz", "Ix", "Iy", "Iz"]
 
 ds = 1.
 dsFine = ds/15.
-nPts = 5
+nPts = 51
 
 dofRange = dict(zip(DOFs, [0.2, 0.2, 0.2, 25./180.*np.pi, 25./180.*np.pi, np.pi]))
 
@@ -186,5 +189,8 @@ for i in dfWpsCoarse.index:
         ds=dofRange["x"]/4., ls="--")
 if saveFigs:
     plt.savefig("./Figures/randomTrajectory_result.png", dpi=200, bbox_inches="tight")
+
+if saveData:
+    history.to_csv("tempData/randomWaypoints_{}.csv".format(dataLabel), index=False)
 
 plt.show()

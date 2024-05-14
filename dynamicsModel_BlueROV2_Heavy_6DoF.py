@@ -48,7 +48,7 @@ class BlueROV2Heavy6DoF_PID_controller(object):
         # K_P = np.array([25., 25., 25., 0.5, 0.5, 1.])
         # K_I = np.array([2., 2., 2., 0.1, 0.1, 0.2])
         # K_D = np.array([20., 20., 20., 0.1, 0.1, 0.65])
-        forceMomentMaxMagnitudes = [50., 50., 50., 2., 2., 2.]
+        forceMomentMaxMagnitudes = [50., 50., 50., 1., 1., 2.]
         K_P = np.array([25., 25., 25., 10., 10., 1.])
         K_I = np.array([2., 2., 2., 0.1, 0.1, 0.2])
         K_D = np.array([20., 20., 20., 5., 5., 0.65])
